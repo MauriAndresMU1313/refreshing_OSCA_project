@@ -1,0 +1,200 @@
+---
+title: "Dependencies loading and set up"
+author: "BS. Mauricio Morales"
+date: "`r Sys.Date()`"
+format: 
+    html: 
+        theme: 
+            dark: darkly
+output: html_document
+editor: 
+    markdown: 
+      wrap: 60
+---
+
+# Install and load packgages
+
+```{r}
+#| warning: false
+
+packages <- c(
+    "renv",
+    "dplyr",
+    "purrr",
+    "here",
+    "tidyr",
+    "MetBrewer",
+    "ggplot2",
+    "patchwork",
+    # Single Cell
+    "Seurat"
+)
+# Install
+installed_packages <- packages %in%
+    rownames(installed.packages())
+if (any(installed_packages == F)) {
+    install.packages(packages[!installed_packages])
+}
+# Load
+suppressPackageStartupMessages({
+    invisible(lapply(packages, library, character.only = T))
+})
+```
+
+# Create project-local library
+
+```{r}
+#| eval: false
+
+# Call renv
+renv::init()
+# If you add new libraries perform an snapshot
+renv::snapshot()
+```
+
+# Set working directory
+
+```{r}
+directory <- here::here()
+```
+
+# Helper functions for QC
+
+```{r}
+.processing_objects <- function(SEURAT_OBJECT, 
+                                   MIN_FEATURES, 
+                                   MAX_FEATURES, 
+                                   PERCENT_MT = NULL) {
+    #' Preprocess Seurat object by applying QC metrics
+    #'
+    #' @param SEURAT_OBJECT Seurat object to preprocess
+    #' @param MIN_FEATURES Minimum number of detected features per cell
+    #' @param MAX_FEATURES Maximum number of detected features per cell
+    #' @param PERCENT_MT Maximum allowed mitochondrial percentage per cell (`NULL` by default)
+    #' @return Filtered Seurat object
+
+    SEURAT_OBJECT <- subset(
+        SEURAT_OBJECT,
+        subset = nFeature_RNA > MIN_FEATURES
+        & nFeature_RNA < MAX_FEATURES
+        & percent.mt < PERCENT_MT
+    )
+
+    SEURAT_OBJECT
+}
+
+.normalizing_plus_hvFeatures <- function(SEURAT_OBJECT) {
+    #' Apply normalization and find Highly Variable Features
+    #'
+    #' @param SEURAT_OBJECT
+    #' @comment default argument in use
+    #' @return SEURAT_OBJECT
+    
+    SEURAT_OBJECT <- Seurat::NormalizeData(
+        SEURAT_OBJECT,
+        normalization.method = "LogNormalize",
+        scale.factor = 10000
+    )
+
+    SEURAT_OBJECT <- Seurat::FindVariableFeatures(
+        SEURAT_OBJECT, 
+        selection.method = "vst",
+        nfeatures = 2000
+    )
+
+    SEURAT_OBJECT
+}
+
+
+```
+
+# Load, generate and process Seurat object
+
+```{r}
+# Load the PBMC dataset
+pbmc.data <- Seurat::Read10X(data.dir = file.path(
+    directory,
+    "inputs/filtered_gene_bc_matrices/hg19/"
+))
+
+# Initialize the Seurat object with the raw (non-normalized data).
+pbmc <- Seurat::CreateSeuratObject(
+    counts = pbmc.data, 
+    project = "pbmc3k", 
+    min.cells = 3, 
+    min.features = 200
+)
+
+# Mitochondrial genes
+pbmc[["percent.mt"]] <- Seurat::PercentageFeatureSet(
+        pbmc, pattern = "^MT-"
+)
+
+# Plot features for QC metrics
+.violin_plot <- Seurat::VlnPlot(
+    pbmc,
+    features = c("nFeature_RNA", "nCount_RNA", "percent.mt"),
+    ncol = 3,
+    pt.size = 0.1,
+    cols = rep("#ab3329", 3)
+    ) +
+    ggplot2::theme(
+        aspect.ratio = 1,
+        plot.title = ggplot2::element_text(hjust = 0.5)
+    )
+
+# Plot feature-feature relationships
+.feature_plot_1 <- Seurat::FeatureScatter(
+    pbmc,
+    feature1 = "nCount_RNA",
+    feature2 = "percent.mt",
+    cols = "#ab3329"
+    ) +
+    ggplot2::theme(
+        aspect.ratio = 1,
+        plot.title = ggplot2::element_text(hjust = 0.5)
+    )
+
+.feature_plot_2 <- Seurat::FeatureScatter(
+    pbmc,
+    feature1 = "nCount_RNA",
+    feature2 = "nFeature_RNA",
+    cols = "#ab3329"
+    ) +
+    ggplot2::theme(
+        aspect.ratio = 1,
+        plot.title = ggplot2::element_text(hjust = 0.5)
+    )
+
+.violin_plot / (.feature_plot_1 + .feature_plot_2)
+
+# Apply processing function
+pbmc %<>% 
+    .processing_objects(
+        MIN_FEATURES = 200,
+        MAX_FEATURES = 2500,
+        PERCENT_MT = 5)
+
+# Normalize and find variable features
+pbmc %<>%
+    .normalizing_plus_hvFeatures()
+
+# plot variable features with and without labels
+.hvFeatures_1 <- Seurat::VariableFeaturePlot(pbmc)
+.hvFeatures_2 <- Seurat::LabelPoints(
+    plot = .hvFeatures_1, 
+    # Top 10
+    points =  head(VariableFeatures(pbmc), 10), 
+    repel = T)
+
+# Plot
+.hvFeatures_1 + .hvFeatures_2
+
+# Scale data
+pbmc %<>% Seurat::ScaleData( 
+    features = rownames(pbmc))
+```
+
+```{r}
+sessionInfo()
+```
