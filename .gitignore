@@ -1,2 +1,7 @@
 # General files
 .DS_Store
+PROTOCOL_files
+
+# Inputs
+inputs/filtered_gene_bc_matrices
+
