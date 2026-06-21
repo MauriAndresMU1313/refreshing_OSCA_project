@@ -130,6 +130,17 @@ pbmc[["percent.mt"]] <- Seurat::PercentageFeatureSet(
         pbmc, pattern = "^MT-"
 )
 
+# Save
+# saveRDS(
+#     pbmc,
+#     file.path(
+#         directory,
+#         "outputs", 
+#         "00_exploratory",
+#         paste0(format(Sys.Date(), "%b_%d_%Y"), "_pbmc_seurat_raw.rds")
+#     )
+# )
+
 # Plot features for QC metrics
 .violin_plot <- Seurat::VlnPlot(
     pbmc,
@@ -166,7 +177,18 @@ pbmc[["percent.mt"]] <- Seurat::PercentageFeatureSet(
         plot.title = ggplot2::element_text(hjust = 0.5)
     )
 
-.violin_plot / (.feature_plot_1 + .feature_plot_2)
+# Save
+# .tiff_pdf_plot(
+#     PLOT = .violin_plot / (.feature_plot_1 + .feature_plot_2),
+#     HEIGHT = 8,
+#     WIDTH = 8,
+#     DIRECTORY = file.path(directory, 
+#     "plots", 
+#     "00_exploratory"),
+#     FILENAME = paste0(format(Sys.Date(), 
+#     "%b_%d_%Y"), 
+#     "_pbmc_qc_violin_plus_features")
+# )
 
 # Apply processing function
 pbmc %<>% 
@@ -175,9 +197,21 @@ pbmc %<>%
         MAX_FEATURES = 2500,
         PERCENT_MT = 5)
 
-# Normalize and find variable features
+# Normalize and find variab le features
 pbmc %<>%
     .normalizing_plus_hvFeatures()
+
+# Save
+# saveRDS(
+#     pbmc,
+#     file.path(
+#         directory,
+#         "outputs",
+#         "00_exploratory",
+#         paste0(format(Sys.Date(), "%b_%d_%Y"), 
+#         "_pbmc_normalized_hvFeatures")
+#     )
+# )
 
 # plot variable features with and without labels
 .hvFeatures_1 <- Seurat::VariableFeaturePlot(pbmc)
@@ -187,8 +221,18 @@ pbmc %<>%
     points =  head(VariableFeatures(pbmc), 10), 
     repel = T)
 
-# Plot
-.hvFeatures_1 + .hvFeatures_2
+# Save
+# .tiff_pdf_plot(
+#     PLOT = .hvFeatures_1 + .hvFeatures_2,
+#     HEIGHT = 10,
+#     WIDTH = 10,
+#     DIRECTORY = file.path(directory, 
+#     "plots", 
+#     "00_exploratory"),
+#     FILENAME = paste0(format(Sys.Date(), 
+#     "%b_%d_%Y"), 
+#     "_pbmc_hvFeatures")
+# )
 
 # Scale data
 pbmc %<>% Seurat::ScaleData( 
