@@ -8,3 +8,4 @@ inputs/filtered_gene_bc_matrices
 # General
 PROTOCOL.html
 documents/
+.Rprofile
