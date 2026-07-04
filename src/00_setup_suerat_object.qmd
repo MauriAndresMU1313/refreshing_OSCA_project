@@ -26,6 +26,8 @@ packages <- c(
     "MetBrewer",
     "ggplot2",
     "patchwork",
+    "magrittr",
+    "ComplexHeatmap",
     # Single Cell
     "Seurat"
 )
@@ -62,9 +64,9 @@ directory <- here::here()
 
 ```{r}
 .processing_objects <- function(SEURAT_OBJECT, 
-                                   MIN_FEATURES, 
-                                   MAX_FEATURES, 
-                                   PERCENT_MT = NULL) {
+                                MIN_FEATURES, 
+                                MAX_FEATURES, 
+                                PERCENT_MT = NULL) {
     #' Preprocess Seurat object by applying QC metrics
     #'
     #' @param SEURAT_OBJECT Seurat object to preprocess
@@ -105,7 +107,62 @@ directory <- here::here()
     SEURAT_OBJECT
 }
 
+.dim_heatmap_ch <- function(
+    SEURAT_OBJECT,
+    P_COMP = NULL,
+    N_GENES = NULL,
+    TITLE = NULL) {
+    #' Plot heatmap to identify source of heterogeneity
+    #'
+    #' @param SEURAT_OBJECT Seurat object post PCA and feature identification
+    #' @param P_COMP Principal component to plot (integer)
+    #' @param N_GENES Number of top and bottom genes by PC loading score
+    #' @param TITLE String for the heatmap title
+    #' @return ComplexHeatmap object
 
+    # Extract PC loadings and select top/bottom N genes
+    LOADINGS <- Seurat::Loadings(SEURAT_OBJECT, reduction = "pca")[, P_COMP]
+    TOP_GENES <- names(sort(LOADINGS, decreasing = TRUE)[1:N_GENES])
+    BOTTOM_GENES <- names(sort(LOADINGS, decreasing = FALSE)[1:N_GENES])
+    SELECTED_GENES <- c(TOP_GENES, BOTTOM_GENES)
+
+    # Sort cells by PC embedding score — this is what creates visible blocks
+    EMBEDDINGS <- Seurat::Embeddings(SEURAT_OBJECT, reduction = "pca")[, P_COMP]
+    SORTED_CELLS <- names(sort(EMBEDDINGS, decreasing = TRUE))
+
+    # Extract scaled expression matrix — genes as rows, sorted cells as columns
+    MATRIX <- Seurat::GetAssayData(
+        SEURAT_OBJECT,
+        layer = "scale.data"
+    )[SELECTED_GENES, SORTED_CELLS]
+
+    # Cell metadata annotation (color bar on top)
+    CELL_IDENTITY <- as.factor(Seurat::Idents(SEURAT_OBJECT))[SORTED_CELLS]
+    ANNOTATION_COLORS <- setNames(
+        MetBrewer::met.brewer("Redon", length(levels(CELL_IDENTITY))),
+        levels(CELL_IDENTITY)
+    )
+    TOP_ANNOTATION <- ComplexHeatmap::HeatmapAnnotation(
+        Identity = CELL_IDENTITY,
+        col = list(Identity = ANNOTATION_COLORS)
+    )
+
+    # Plot
+    HT <- ComplexHeatmap::Heatmap(
+        matrix = MATRIX,
+        name = "Scaled Expression",
+        column_title = TITLE,
+        top_annotation = TOP_ANNOTATION,
+        cluster_rows = FALSE,
+        cluster_columns = FALSE,
+        show_column_names = FALSE,
+        show_row_names = TRUE,
+        row_names_gp = grid::gpar(fontsize = 8)
+    )
+
+    FN <- function() ComplexHeatmap::draw(HT)
+    ggplotify::as.ggplot(FN)
+}
 ```
 
 # Load, generate and process Seurat object
@@ -209,7 +266,7 @@ pbmc %<>%
 #         "outputs",
 #         "00_exploratory",
 #         paste0(format(Sys.Date(), "%b_%d_%Y"), 
-#         "_pbmc_normalized_hvFeatures")
+#         "_pbmc_normalized_hvFeatures.rds")
 #     )
 # )
 
@@ -236,7 +293,81 @@ pbmc %<>%
 
 # Scale data
 pbmc %<>% Seurat::ScaleData( 
-    features = rownames(pbmc))
+    features = rownames(pbmc)) %>%
+        Seurat::RunPCA(
+            features = Seurat::VariableFeatures(object = pbmc))
+
+# Dimensional reduction
+.dim_loadings_pc <- lapply(1:3, function(i) {
+    Seurat::VizDimLoadings(
+        pbmc, 
+        dims = i, 
+        reduction = "pca", 
+        col = "#ab3329") +
+        ggplot2::xlab(paste0("PC", i)) +
+        ggplot2::theme(
+            aspect.ratio = 2,
+            plot.title = ggplot2::element_text(hjust = 0.5)
+        )
+}) %>% patchwork::wrap_plots()
+
+# Heatmap of Principal Component X
+.pc_heatmap <- .dim_heatmap_ch(
+    pbmc,
+    P_COMP = 1,
+    # Default (top 15, positive and negative)
+    N_GENES = 30,
+    TITLE = "Top genes PC1",
+    TOP_ANNOTATION = FALSE
+)
+
+# Save 
+fs::dir_create(path = file.path(
+    directory, 
+    "plots/00_exploratory/dim_red_PCs/")) 
+
+# .tiff_pdf_plot(
+#     .dim_loadings_pc,
+#     HEIGHT = 12,
+#     WIDTH = 10,
+#     DIRECTORY = file.path(
+#         directory,
+#         "plots/",
+#         "00_exploratory/",
+#         "dim_red_PCs/"),
+#         FILENAME = paste0(format(Sys.time(),
+#         "%b_%d_%Y"),
+#         "_pcs_1-3_loadings")
+# )
+
+# purrr::walk(1:3, function(PC) {
+#     .tiff_pdf_plot(
+#         PLOT = .dim_heatmap_ch(
+#             SEURAT_OBJECT = pbmc,
+#             P_COMP = PC,
+#             N_GENES = 30,
+#             TITLE = paste0("PC_", PC)
+#         ),
+#         HEIGHT = 10,
+#         WIDTH = 10,
+#         DIRECTORY = file.path(directory, 
+#         "plots", 
+#         "00_exploratory", 
+#         "dim_red_PCs/"),
+#         FILENAME = paste0(format(Sys.Date(), 
+#         "%b_%d_%Y"), 
+#         "_PC", 
+#         PC, 
+#         "_dim_heatmap"))
+# })
+```
+
+## Note 1: focusing in few PCs is not recommended it. Always check for more.
+
+# Helper function for cell clustering
+ 
+```{r}
+
 ```
 
 ```{r}
