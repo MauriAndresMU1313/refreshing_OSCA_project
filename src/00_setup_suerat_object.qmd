@@ -28,8 +28,13 @@ packages <- c(
     "patchwork",
     "magrittr",
     "ComplexHeatmap",
+    "devtools",
     # Single Cell
-    "Seurat"
+    "Seurat",
+    # Single Cell plotting
+    "SCpubr",
+    # Fast Wilcoxon rank sum test and auROC analysis
+    "presto"
 )
 # Install
 installed_packages <- packages %in%
@@ -52,6 +57,10 @@ suppressPackageStartupMessages({
 renv::init()
 # If you add new libraries perform an snapshot
 renv::snapshot()
+# Open configuration files
+usethis::edit_r_environ(scope = "user")
+# Source global helper functions
+source(file = file.path(directory, "src/code_base.R"))
 ```
 
 # Set working directory
@@ -63,10 +72,11 @@ directory <- here::here()
 # Helper functions for QC
 
 ```{r}
-.processing_objects <- function(SEURAT_OBJECT, 
-                                MIN_FEATURES, 
-                                MAX_FEATURES, 
-                                PERCENT_MT = NULL) {
+.processing_objects <- function(
+    SEURAT_OBJECT, 
+    MIN_FEATURES, 
+    MAX_FEATURES, 
+    PERCENT_MT = NULL) {
     #' Preprocess Seurat object by applying QC metrics
     #'
     #' @param SEURAT_OBJECT Seurat object to preprocess
@@ -85,7 +95,8 @@ directory <- here::here()
     SEURAT_OBJECT
 }
 
-.normalizing_plus_hvFeatures <- function(SEURAT_OBJECT) {
+.normalizing_plus_hvFeatures <- function(
+    SEURAT_OBJECT) {
     #' Apply normalization and find Highly Variable Features
     #'
     #' @param SEURAT_OBJECT
@@ -317,14 +328,13 @@ pbmc %<>% Seurat::ScaleData(
     P_COMP = 1,
     # Default (top 15, positive and negative)
     N_GENES = 30,
-    TITLE = "Top genes PC1",
-    TOP_ANNOTATION = FALSE
+    TITLE = "Top genes PC1"
 )
 
 # Save 
-fs::dir_create(path = file.path(
-    directory, 
-    "plots/00_exploratory/dim_red_PCs/")) 
+# fs::dir_create(path = file.path(
+#     directory, 
+#     "plots/00_exploratory/dim_red_PCs/")) 
 
 # .tiff_pdf_plot(
 #     .dim_loadings_pc,
@@ -367,7 +377,91 @@ fs::dir_create(path = file.path(
 # Helper function for cell clustering
  
 ```{r}
+.dim_umap_scpub <- function(
+    SEURAT_OBJECT,
+    POINT_SIZE = NULL,
+    LABEL_SIZE = NULL,
+    LABEL = FALSE,
+    PALETTE = NULL) {
+    #' Generate UMAP publication-ready plot
+    #'
+    #' @param SEURAT_OBJECT Seurat object post clustering and UMAP reduction
+    #' @param POINT_SIZE Point size for cells
+    #' @param LABEL_SIZE Cluster label size
+    #' @param PALETTE MetBrewer palette name
+    #' @return ggplot2 object
 
+    CLUSTER_IDS <- levels(Seurat::Idents(SEURAT_OBJECT))
+    N_CLUSTERS <- length(CLUSTER_IDS)
+    PALETTE_MAX <- length(MetBrewer::met.brewer(PALETTE))
+
+    COLORS <- setNames(
+        if (N_CLUSTERS > PALETTE_MAX) {
+            MetBrewer::met.brewer(PALETTE, n = N_CLUSTERS, type = "continuous")
+        } else {
+            MetBrewer::met.brewer(PALETTE, n = N_CLUSTERS, type = "discrete")
+        },
+        CLUSTER_IDS
+    )
+
+    SCpubr::do_DimPlot(
+    sample = SEURAT_OBJECT,
+    reduction = "umap",
+    pt.size = POINT_SIZE,
+    label = LABEL,
+    label.box = FALSE,
+    label.size = LABEL_SIZE,
+    colors.use = COLORS
+    )
+}
+
+.vln_plot_markers <- function(
+    SEURAT_OBJECT,
+    MARKERS = NULL) {
+        
+    }
+```
+
+# Clustering, dimensional reduction and DEGs
+
+```{r}
+# Clustering and Non-linear dimensional reduction 
+pbmc %<>% 
+    Seurat::FindNeighbors(dim = 1:10) %>%
+    Seurat::FindClusters(resolution = 0.5) %>%
+    Seurat::RunUMAP(dims = 1:10)
+
+# Save
+# saveRDS(
+#     object = pbmc,
+#     file = file.path(
+#         directory,
+#         "outputs", 
+#         "00_exploratory/",
+#         paste0(format(Sys.time(), "%b_%d_%Y"),
+#         "_pbmc_clustering.rds")))
+
+# Plot UMAP
+.p_umap_raw <- .dim_umap_scpub(
+     pbmc, 
+     POINT_SIZE = 1, 
+     LABEL_SIZE = 0.5,
+     PALATTE = "Signac")
+
+# Save
+# .tiff_pdf_plot(
+#   PLOT = .p_umap_raw, 
+#   HEIGHT = 8, 
+#   WIDTH = 8,
+#   DIRECTORY = file.path(
+#     directory,
+#     "plots",
+#     "00_exploratory"),
+#     FILENAME = paste0(format(Sys.time(), "%b_%d_%Y"),
+#     "_pbmc_umap_raw"))
+
+# Find markers for every cluster compared to all remaining cells (only positive)
+pbmc.markers <- Seurat::FindAllMarkers(pbmc, only.pos = TRUE)
 ```
 
 ```{r}
