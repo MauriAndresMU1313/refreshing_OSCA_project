@@ -417,9 +417,116 @@ pbmc %<>% Seurat::ScaleData(
 
 .vln_plot_markers <- function(
     SEURAT_OBJECT,
-    MARKERS = NULL) {
-        
-    }
+    MARKERS = NULL,
+    PALETTE = NULL) {
+    #' Violin plots for marker genes arranged in a grid
+    #'
+    #' @param SEURAT_OBJECT Seurat object post marker identification
+    #' @param MARKERS character vector of marker genes to plot
+    #' @param PALETTE MetBrewer palette name
+    #' @return patchwork grid of violin plots
+
+    N_CLUSTERS <- length(levels(Seurat::Idents(SEURAT_OBJECT)))
+    PALETTE_MAX <- length(MetBrewer::met.brewer(PALETTE))
+
+    COLORS <- setNames(
+        if (N_CLUSTERS > PALETTE_MAX) {
+            MetBrewer::met.brewer(PALETTE, n = N_CLUSTERS, type = "continuous")
+        } else {
+            MetBrewer::met.brewer(PALETTE, n = N_CLUSTERS, type = "discrete")
+        },
+        levels(Seurat::Idents(SEURAT_OBJECT))
+    )
+
+    purrr::map(MARKERS, ~ SCpubr::do_ViolinPlot(
+        sample = SEURAT_OBJECT,
+        features = .x,
+        colors.use = COLORS
+    )) %>%
+        patchwork::wrap_plots()
+}
+
+.feature_plot_markers <- function(
+    SEURAT_OBJECT,
+    MARKERS = NULL,
+    PALATTE = NULL,
+    COLORS = NULL) {
+    #' Feature plots for marker genes arranged in a grid
+    #'
+    #' @param SEURAT_OBJECT Seurat object post marker identification
+    #' @param MARKERS character vector of marker genes to plot
+    #' @param PALETTE MetBrewer palette name, defaults to "Redon"
+    #' @return patchwork grid of feature plots
+
+    # COLORS <- MetBrewer::met.brewer(PALETTE, type = "continuous")
+
+    purrr::map(MARKERS, ~ SCpubr::do_FeaturePlot(
+        sample = SEURAT_OBJECT,
+        features = .x,
+        sequential.palette = COLORS
+    )) %>%
+        patchwork::wrap_plots()
+}
+
+.cluster_heatmap_ch <- function(
+    SEURAT_OBJECT,
+    MARKERS,
+    PALETTE = NULL,
+    TITLE = NULL) {
+    #' Plot heatmap of top marker genes per cluster
+    #'
+    #' @param SEURAT_OBJECT Seurat object post marker identification
+    #' @param MARKERS dataframe from FindAllMarkers() filtered to desired genes
+    #' @param PALETTE MetBrewer palette name, defaults to "Redon"
+    #' @param TITLE String for the heatmap title
+    #' @return ComplexHeatmap ggplot2 object
+
+    # Extract gene order and scaled matrix
+    SELECTED_GENES <- unique(MARKERS$gene)
+    MATRIX <- Seurat::GetAssayData(
+        SEURAT_OBJECT,
+        layer = "scale.data"
+    )[SELECTED_GENES, ]
+
+    # Sort cells by cluster identity
+    CELL_IDENTITY <- Seurat::Idents(SEURAT_OBJECT)
+    SORTED_CELLS <- names(sort(CELL_IDENTITY))
+    MATRIX <- MATRIX[, SORTED_CELLS]
+
+    # Cluster annotation color bar
+    CLUSTER_IDS <- levels(CELL_IDENTITY)
+    N_CLUSTERS <- length(CLUSTER_IDS)
+    PALETTE_MAX <- length(MetBrewer::met.brewer(PALETTE))
+
+    ANNOTATION_COLORS <- setNames(
+        if (N_CLUSTERS > PALETTE_MAX) {
+            MetBrewer::met.brewer(PALETTE, n = N_CLUSTERS, type = "continuous")
+        } else {
+            MetBrewer::met.brewer(PALETTE, n = N_CLUSTERS, type = "discrete")
+        },
+        CLUSTER_IDS
+    )
+
+    TOP_ANNOTATION <- ComplexHeatmap::HeatmapAnnotation(
+        Cluster = as.factor(CELL_IDENTITY)[SORTED_CELLS],
+        col = list(Cluster = ANNOTATION_COLORS)
+    )
+
+    HT <- ComplexHeatmap::Heatmap(
+        matrix = MATRIX,
+        name = "Scaled Expression",
+        column_title = TITLE,
+        top_annotation = TOP_ANNOTATION,
+        cluster_rows = FALSE,
+        cluster_columns = FALSE,
+        show_column_names = FALSE,
+        show_row_names = TRUE,
+        row_names_gp = grid::gpar(fontsize = 8)
+    )
+
+    FN <- function() ComplexHeatmap::draw(HT)
+    ggplotify::as.ggplot(FN)
+}
 ```
 
 # Clustering, dimensional reduction and DEGs
@@ -446,7 +553,7 @@ pbmc %<>%
      pbmc, 
      POINT_SIZE = 1, 
      LABEL_SIZE = 0.5,
-     PALATTE = "Signac")
+     PALETTE = "Signac")
 
 # Save
 # .tiff_pdf_plot(
@@ -462,6 +569,124 @@ pbmc %<>%
 
 # Find markers for every cluster compared to all remaining cells (only positive)
 pbmc.markers <- Seurat::FindAllMarkers(pbmc, only.pos = TRUE)
+
+# Plot marker expression per cluster
+.vln_markers <- .vln_plot_markers(
+    pbmc, 
+    MARKERS = c("MS4A1", "CD79A"), 
+    PALETTE = "Signac")
+
+# Markers directory
+fs::dir_create(path = file.path(
+    directory, 
+    "plots/00_exploratory/markers/")) 
+
+# Save
+# .tiff_pdf_plot(
+#     PLOT = .vln_markers,
+#     HEIGHT = 6,
+#     WIDTH = 8,
+#     DIRECTORY = file.path(
+#         directory,
+#         "plots",
+#         "00_exploratory",
+#         "markers"),
+#         FILENAME = paste0(format(Sys.time(), "%b_%d_%Y"),
+#         "_vln_MS4A1_CD79A")
+#     )
+
+# Plot
+.feature_markers <- .feature_plot_markers(
+    pbmc, 
+    MARKERS = c("MS4A1", "CD79A"), 
+    COLORS = "Reds")
+
+# Save
+# .tiff_pdf_plot(
+#     PLOT = .feature_markers,
+#     HEIGHT = 6,
+#     WIDTH = 8,
+#     DIRECTORY = file.path(
+#         directory,
+#         "plots",
+#         "00_exploratory",
+#         "markers"),
+#         FILENAME = paste0(format(Sys.time(), "%b_%d_%Y"),
+#         "_feature_MS4A1_CD79A")
+#     )
+
+# Plot top 10 per clusters with heatmap
+.top_10 <- pbmc.markers %>%
+    dplyr::group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1) %>%
+    dplyr::slice_head(n = 10) %>%
+    dplyr::ungroup()
+
+.top10_heatmap <- .cluster_heatmap_ch(
+    SEURAT_OBJECT = pbmc,
+    MARKERS = .top_10,
+    PALETTE = "Signac",
+    TITLE = "Top 10 genes per cluster")
+
+# Save
+# .tiff_pdf_plot(
+#     PLOT = .top10_heatmap,
+#     HEIGHT = 10,
+#     WIDTH = 10,
+#     DIRECTORY = file.path(
+#         directory,
+#         "plots",
+#         "00_exploratory"),
+#         FILENAME = paste0(format(Sys.time(), "%b_%d_%Y"),
+#         "_pbmc_top10_heatmap"
+#     ))
+
+# Assign markers to clusters
+new.cluster.ids <- c(
+    "Naive CD4 T", 
+    "CD14+ Mono", 
+    "Memory CD4 T", 
+    "B", 
+    "CD8 T", 
+    "FCGR3A+ Mono",
+    "NK", 
+    "DC", 
+    "Platelet")
+
+names(new.cluster.ids) <- levels(pbmc)
+pbmc <- Seurat::RenameIdents(pbmc, new.cluster.ids)
+
+# Plot with labels
+.p_umap_labels <- .dim_umap_scpub(
+     pbmc, 
+     LABEL = TRUE,
+     POINT_SIZE = 1, 
+     LABEL_SIZE = 0.5,
+     PALETTE = "Signac")
+
+# Save
+# .tiff_pdf_plot(
+#     PLOT = .p_umap_labels,
+#     HEIGHT = 8,
+#     WIDTH = 8,
+#     DIRECTORY = file.path(
+#         directory,
+#         "plots",
+#         "00_exploratory"),
+#         FILENAME = paste0(format(Sys.time(), "%b_%d_%Y"),
+#         "_pbmc_umap_annotated")
+#     )
+# )
+
+# Save
+# saveRDS(
+#     object = pbmc,
+#     file = file.path(
+#         directory,
+#         "outputs", 
+#         "00_exploratory/",
+#         paste0(format(Sys.time(), "%b_%d_%Y"),
+#         "_pbmc_final.rds")))
 ```
 
 ```{r}
