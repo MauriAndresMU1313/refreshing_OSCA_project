@@ -9,3 +9,6 @@ inputs/filtered_gene_bc_matrices
 PROTOCOL.html
 documents/
 .Rprofile
+
+# Plots
+*.tiff
