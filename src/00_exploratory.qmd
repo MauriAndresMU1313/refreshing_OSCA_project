@@ -1,5 +1,5 @@
 ---
-title: "Dependencies loading and set up"
+title: "Exploratory analysis: PBMC-3k"
 author: "BS. Mauricio Morales"
 date: "`r Sys.Date()`"
 format: 

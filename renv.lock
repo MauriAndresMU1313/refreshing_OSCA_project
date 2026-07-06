@@ -5,6 +5,26 @@
       {
         "Name": "CRAN",
         "URL": "https://cran.rstudio.com"
+      },
+      {
+        "Name": "BioCsoft",
+        "URL": "https://bioconductor.org/packages/3.23/bioc"
+      },
+      {
+        "Name": "BioCann",
+        "URL": "https://bioconductor.org/packages/3.23/data/annotation"
+      },
+      {
+        "Name": "BioCexp",
+        "URL": "https://bioconductor.org/packages/3.23/data/experiment"
+      },
+      {
+        "Name": "BioCworkflows",
+        "URL": "https://bioconductor.org/packages/3.23/workflows"
+      },
+      {
+        "Name": "BioCbooks",
+        "URL": "https://bioconductor.org/packages/3.23/books"
       }
     ]
   },
@@ -936,6 +956,95 @@
       "Author": "Object-Oriented Programming Working Group [cph], Davis Vaughan [aut], Jim Hester [aut] (ORCID: <https://orcid.org/0000-0002-2739-7082>), Tomasz Kalinowski [aut], Will Landau [aut], Michael Lawrence [aut], Martin Maechler [aut] (ORCID: <https://orcid.org/0000-0002-8685-9910>), Luke Tierney [aut], Hadley Wickham [aut, cre] (ORCID: <https://orcid.org/0000-0003-4757-117X>)",
       "Maintainer": "Hadley Wickham <hadley@posit.co>",
       "Repository": "CRAN"
+    },
+    "SCpubr": {
+      "Package": "SCpubr",
+      "Version": "3.0.1",
+      "Source": "GitHub",
+      "Type": "Package",
+      "Title": "Generate Publication Ready Visualizations of Single Cell Transcriptomics Data",
+      "Authors@R": "person(\"Enrique\", \"Blanco-Carmona\", , \"scpubr@gmail.com\", role = c(\"cre\", \"aut\"), comment = c(ORCID = \"0000-0002-1208-1691\"))",
+      "Description": "A system that provides a streamlined way of generating publication ready plots for known Single-Cell transcriptomics data in a “publication ready” format. This is, the goal is to automatically generate plots with the highest quality possible, that can be used right away or with minimal modifications for a research article.",
+      "License": "GPL-3",
+      "URL": "https://github.com/enblacar/SCpubr/, https://enblacar.github.io/SCpubr-book/",
+      "BugReports": "https://github.com/enblacar/SCpubr/issues/",
+      "Depends": [
+        "R (>= 4.0.0)"
+      ],
+      "Suggests": [
+        "assertthat",
+        "circlize",
+        "cli",
+        "cluster",
+        "colorspace",
+        "ComplexHeatmap",
+        "covr",
+        "decoupleR",
+        "dplyr (>= 1.1.0)",
+        "enrichplot",
+        "forcats",
+        "ggalluvial (>= 0.12.5)",
+        "ggbeeswarm",
+        "ggdist",
+        "ggExtra",
+        "ggh4x",
+        "ggplot2 (>= 3.4.0)",
+        "ggplotify",
+        "ggrastr",
+        "ggrepel",
+        "ggridges",
+        "ggsignif",
+        "graphics",
+        "infercnv",
+        "KernSmooth",
+        "knitr",
+        "labeling",
+        "magrittr",
+        "MASS",
+        "Matrix",
+        "methods",
+        "Nebulosa",
+        "org.Hs.eg.db",
+        "patchwork",
+        "pheatmap",
+        "plyr",
+        "purrr",
+        "qpdf",
+        "RColorBrewer",
+        "rjags",
+        "rlang",
+        "rmarkdown",
+        "scales",
+        "scattermore",
+        "Seurat",
+        "SeuratObject",
+        "sf",
+        "stringr",
+        "svglite",
+        "testthat (>= 3.0.0)",
+        "tibble",
+        "tidyr",
+        "UCell",
+        "viridis",
+        "withr"
+      ],
+      "VignetteBuilder": "knitr",
+      "biocViews": "Software, SingleCell, Visualization",
+      "Config/testthat/edition": "3",
+      "Encoding": "UTF-8",
+      "LazyData": "true",
+      "LazyDataCompression": "xz",
+      "Roxygen": "list(markdown = TRUE)",
+      "RoxygenNote": "7.3.3",
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteRepo": "SCpubr",
+      "RemoteUsername": "enblacar",
+      "RemoteRef": "HEAD",
+      "RemoteSha": "a3ae2999ce50f32b96a68664f1880faafe94f01e",
+      "NeedsCompilation": "no",
+      "Author": "Enrique Blanco-Carmona [cre, aut] (ORCID: <https://orcid.org/0000-0002-1208-1691>)",
+      "Maintainer": "Enrique Blanco-Carmona <scpubr@gmail.com>"
     },
     "Seurat": {
       "Package": "Seurat",
