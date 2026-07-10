@@ -50,11 +50,14 @@ suppressPackageStartupMessages({
 
 # Create project-local library
 
+# Note 1: renv::init() will be run only for project set-up
+
 ```{r}
 #| eval: false
 
-# Call renv
-renv::init()
+# Call renv (Run only first time)
+# renv::init()
+
 # If you add new libraries perform an snapshot
 renv::snapshot()
 # Open configuration files
@@ -372,7 +375,7 @@ pbmc %<>% Seurat::ScaleData(
 # })
 ```
 
-## Note 1: focusing in few PCs is not recommended it. Always check for more.
+## Note 2: focusing in few PCs is not recommended it. Always check for more.
 
 # Helper function for cell clustering
  
