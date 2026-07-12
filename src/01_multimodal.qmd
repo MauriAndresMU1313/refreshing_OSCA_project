@@ -1,0 +1,208 @@
+---
+title: "Multimodal data" 
+author: "BS. Mauricio Morales"
+date: "`r Sys.Date()`"
+format:
+    html:
+        theme:
+            dark: darkly
+output: html_document
+editor:
+    markdown:
+        wrap: 60
+---
+
+# Install and load packgages
+
+```{r}
+#| warning: false
+
+packages <- c(
+    "renv",
+    "dplyr",
+    "purrr",
+    "here",
+    "tidyr",
+    "MetBrewer",
+    "ggplot2",
+    "patchwork",
+    "magrittr",
+    "ComplexHeatmap",
+    "devtools",
+    # Single Cell
+    "Seurat",
+    "SeuratObject",
+    # Single Cell plotting
+    "SCpubr",
+    # Fast Wilcoxon rank sum test and auROC analysis
+    "presto"
+)
+# Install
+installed_packages <- packages %in%
+    rownames(installed.packages())
+if (any(installed_packages == F)) {
+    install.packages(packages[!installed_packages])
+}
+# Load
+suppressPackageStartupMessages({
+    invisible(lapply(packages, library, character.only = T))
+})
+```
+
+# Create project-local library
+
+```{r}
+#| eval: false
+
+# If you add new libraries perform an snapshot
+renv::snapshot()
+# Open configuration files
+usethis::edit_r_environ(scope = "user")
+# Source global helper functions
+source(file = file.path(directory, "src/code_base.R"))
+```
+
+# Set working directory
+
+```{r}
+directory <- here::here()
+```
+
+# Load data sets
+
+# Note 1: dataset contains ~5% of mouse cells, which we can use as negative
+# controls for the protein measurements (HUMAN_ and MOUSE_ string in features)
+
+```{r}
+# RNA
+cbmc_rna <- Seurat::as.sparse(
+    utils::read.csv(file = file.path(
+        directory,
+        "inputs/multimodal_rna_adt/GSE100866_CBMC_8K_13AB_10X-RNA_umi.csv.gz"
+    ), 
+    sep = ",",
+    header = T,
+    row.names = 1 
+    )) %>%
+    Seurat::CollapseSpeciesExpressionMatrix()
+
+# ADT
+cbmc_adt <- Seurat::as.sparse(read.csv(
+    file = file.path(
+        directory,
+        "inputs/multimodal_rna_adt/GSE100866_CBMC_8K_13AB_10X-ADT_umi.csv.gz"
+    ),
+    sep = ",",
+    header = T,
+    row.names = 1))
+
+# Check if equal
+all.equal(colnames(cbmc_rna), colnames(cbmc_adt))
+
+# Create objects
+cbmc_rna %<>%
+    Seurat::CreateSeuratObject()
+
+# Create assay from the ADT matrix
+adt_assay <- SeuratObject::CreateAssay5Object(cbmc_adt)
+
+# Add the assay to the Seurat object
+cbmc_rna[["ADT"]] <- adt_assay
+
+# Save
+# saveRDS(
+#     object = cbmc_rna,
+#     file = file.path(
+#         directory,
+#         "outputs",
+#         "01_multimodal",
+#         paste0(format(Sys.Date(), "%b_%d_%Y"), "_cbmc_rna_raw.rds")
+#     )
+# )
+
+# Clean
+rm(cbmc_adt)
+```
+
+# Clustering
+
+```{r}
+cbmc_rna %<>%
+    Seurat::NormalizeData() %>%
+    Seurat::FindVariableFeatures() %>%
+    Seurat::ScaleData() %>%
+    Seurat::RunPCA(
+        verbose = FALSE
+    ) %>%
+    Seurat::FindNeighbors(
+        dims = 1:30
+    ) %>%
+    Seurat::FindClusters(
+        resolution = 0.8,
+        verbose = FALSE
+    ) %>%
+    Seurat::RunUMAP(
+        dims = 1:30)
+
+# UMAP
+.umap_raw <- .dim_umap_scpub(
+    SEURAT_OBJECT = cbmc_rna,
+    POINT_SIZE = 1,
+    LABEL_SIZE = 0.5,
+    LABEL = FALSE,
+    PALETTE = "Signac"
+)
+
+# Save
+# .tiff_pdf_plot(
+#     PLOT = .umap_raw,
+#     HEIGHT = 8,
+#     WIDTH = 8,
+#     DIRECTORY = file.path(
+#         directory,
+#         "plots",
+#         "01_multimodal"),
+#         paste0(format(Sys.Date(), "%b_%d_%Y"),
+#         "_umap_raw"))
+
+# Normalize taking ADT into account
+cbmc_rna %<>% Seurat::NormalizeData(
+    normalization.method = "CLR", 
+    margin = 2, 
+    assay = "ADT")
+
+# CD19 levels for RNA and protein (always set default assay first)
+Seurat::DefaultAssay(cbmc_rna) <- "ADT"
+
+.feature_1 <- .feature_plot_markers(
+    SEURAT_OBJECT = cbmc_rna,
+    MARKERS = "CD19",
+    COLORS = "Reds")[[1]] +
+    ggplot2::ggtitle("CD19 protein")
+
+Seurat::DefaultAssay(cbmc_rna) <- "RNA"
+
+.feature_2 <- .feature_plot_markers(
+    SEURAT_OBJECT = cbmc_rna,
+    MARKERS = "CD19",
+    COLORS = "Blues")[[1]] +
+    ggplot2::ggtitle("CD19 RNA")
+
+# Save
+# .tiff_pdf_plot(
+#     PLOT = .feature_1 | .feature_2,
+#     HEIGHT = 6,
+#     WIDTH = 8,
+#     DIRECTORY = file.path(
+#         directory, 
+#         "plots",
+#         "01_multimodal"),
+#         paste0(format(Sys.Date(), "%b_%d_%Y"),
+#         "_feature_cd19_rna_adt"))
+
+
+```
+
+```{r}
+sessionInfo()
+```
