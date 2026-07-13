@@ -3,7 +3,7 @@
 PROTOCOL_files
 
 # Inputs
-inputs/filtered_gene_bc_matrices
+inputs
 
 # General
 PROTOCOL.html
