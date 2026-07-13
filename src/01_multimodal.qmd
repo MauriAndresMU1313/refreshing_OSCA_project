@@ -116,12 +116,12 @@ cbmc_rna[["ADT"]] <- adt_assay
 #         directory,
 #         "outputs",
 #         "01_multimodal",
-#         paste0(format(Sys.Date(), "%b_%d_%Y"), "_cbmc_rna_raw.rds")
+#         paste0(format(Sys.Date(), "%b_%d_%Y"), "_cbmc_rna_adt_raw.rds")
 #     )
 # )
 
 # Clean
-rm(cbmc_adt)
+rm(cbmc_adt, adt_assay)
 ```
 
 # Clustering
@@ -143,6 +143,18 @@ cbmc_rna %<>%
     ) %>%
     Seurat::RunUMAP(
         dims = 1:30)
+
+# Save
+# saveRDS(
+#     object = cbmc_rna,
+#     file = file.path(
+#         directory,
+#         "outputs",
+#         "01_multimodal",
+#         paste0(format(Sys.Date(), "%b_%d_%Y"),
+#         "_cbmc_rna_adt_processed.rds")
+#     )
+# )
 
 # UMAP
 .umap_raw <- .dim_umap_scpub(
@@ -200,7 +212,65 @@ Seurat::DefaultAssay(cbmc_rna) <- "RNA"
 #         paste0(format(Sys.Date(), "%b_%d_%Y"),
 #         "_feature_cd19_rna_adt"))
 
+# Add key to identify RNA and ADT
+Seurat::Key(cbmc_rna[["RNA"]])
+Seurat::Key(cbmc_rna[["ADT"]])
 
+# Plot
+.vln_adt_cd19 <- .vln_plot_markers(
+        SEURAT_OBJECT = cbmc_rna,
+        MARKERS = "CD19",
+        PALETTE = "Signac",
+        ASSAY = "ADT"
+)
+
+# Save
+# .tiff_pdf_plot(
+#     PLOT = .vln_adt_cd19,
+#     HEIGHT = 6,
+#     WIDTH = 8,
+#     DIRECTORY = file.path(
+#         directory,
+#         "plots",
+#         "01_multimodal"),
+#         FILENAME = paste0(format(Sys.Date(), "%b_%d_%Y"),
+#         "_vln_adt_cd19_normalized_expression")
+#     )
+# )
+
+.feature_adt_cd19_cd3 <- Seurat::FeatureScatter(
+    cbmc_rna,
+    feature1 = "adt_CD19",
+    feature2 = "adt_CD3",
+    # Apply more color options in case of not enough colors for palette
+    cols = MetBrewer::met.brewer(
+        "Signac",
+        n = length(levels(Seurat::Idents(cbmc_rna))),
+        type = if (length(levels(Seurat::Idents(cbmc_rna))) > 
+            length(MetBrewer::met.brewer("Signac"))) "continuous" else "discrete"
+    )) +
+    ggplot2::labs(
+        x = "ADT CD19",
+        y = "ADT CD3"
+    ) + 
+    ggplot2::theme(
+        aspect.ratio = 1,
+        plot.title = ggplot2::element_text(hjust = 0.5)
+    )
+
+# Save
+# .tiff_pdf_plot(
+#     PLOT = .feature_adt_cd19_cd3,
+#     HEIGHT = 6,
+#     WIDTH = 6,
+#     DIRECTORY = file.path(
+#         directory,
+#         "plots",
+#         "01_multimodal"),
+#         FILENAME = paste0(format(Sys.Date(), "%b_%d_%Y"),
+#         "_scatter_feature_adt_cd19_cd3")
+#     )
+# )
 ```
 
 ```{r}
