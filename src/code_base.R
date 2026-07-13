@@ -30,6 +30,23 @@
     )
 }
 
+.get_palette <- function(
+    SEURAT_OBJECT, 
+    PALETTE) {
+    #' Handle long list of colors by adapting from `continuous` to `dicrete` palette type
+    #' 
+    #' @param SEURAT_OBJECT that is necessary for plotting
+    #' @param PALETTE to use from `MetBrewer`
+    #' @return allows to extend the `n` for color palettes
+
+    N <- length(levels(Seurat::Idents(SEURAT_OBJECT)))
+    MetBrewer::met.brewer(
+        PALETTE,
+        n = N,
+        type = if (N > length(MetBrewer::met.brewer(PALETTE))) "continuous" else "discrete"
+    )
+}
+
 .ridge_plot <- function(
     SEURAT_OBJECT,
     MARKERS = NULL,
@@ -127,4 +144,42 @@
         sequential.palette = COLORS
     )) %>%
         patchwork::wrap_plots()
+}
+
+.vln_plot_markers <- function(
+    SEURAT_OBJECT,
+    MARKERS = NULL,
+    PALETTE = NULL,
+    COLUMNS = NULL,
+    ASSAY = NULL) {
+    #' Violin plots for marker genes arranged in a grid
+    #'
+    #' @param SEURAT_OBJECT Seurat object post marker identification
+    #' @param MARKERS character vector of marker genes to plot
+    #' @param PALETTE MetBrewer palette name
+    #' @param COLUMNS Number of columns for the layout of plots
+    #' @param ASSAY Assay to use
+    #' @return patchwork grid of violin plots
+
+    N_CLUSTERS <- length(levels(Seurat::Idents(SEURAT_OBJECT)))
+    PALETTE_MAX <- length(MetBrewer::met.brewer(PALETTE))
+
+    COLORS <- setNames(
+        if (N_CLUSTERS > PALETTE_MAX) {
+            MetBrewer::met.brewer(PALETTE, n = N_CLUSTERS, type = "continuous")
+        } else {
+            MetBrewer::met.brewer(PALETTE, n = N_CLUSTERS, type = "discrete")
+        },
+        levels(Seurat::Idents(SEURAT_OBJECT))
+    )
+
+    purrr::map(MARKERS, ~ SCpubr::do_ViolinPlot(
+        sample = SEURAT_OBJECT,
+        features = .x,
+        assay = ASSAY,
+        colors.use = COLORS
+    )) %>%
+        patchwork::wrap_plots(ncol = COLUMNS) +
+        patchwork::plot_layout(guides = "collect") &
+        ggplot2::theme(legend.position = "bottom")
 }
