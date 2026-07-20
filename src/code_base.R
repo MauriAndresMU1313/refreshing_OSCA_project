@@ -91,16 +91,28 @@
     POINT_SIZE = NULL,
     LABEL_SIZE = NULL,
     LABEL = FALSE,
+    REDUCTION = NULL,
+    GROUP_BY = NULL,
+    SPLIT_BY = NULL,
     PALETTE = NULL) {
-    #' Generate UMAP publication-ready plot
+    #' Generate UMAP plot
     #'
     #' @param SEURAT_OBJECT Seurat object post clustering and UMAP reduction
     #' @param POINT_SIZE Point size for cells
     #' @param LABEL_SIZE Cluster label size
+    #' @param LABEL Whether to show cluster labels
+    #' @param REDUCTION Dimensional reduction to use
+    #' @param GROUP_BY Metadata column to group cells by
     #' @param PALETTE MetBrewer palette name
     #' @return ggplot2 object
 
-    CLUSTER_IDS <- levels(Seurat::Idents(SEURAT_OBJECT))
+    # Handle metadata
+    CLUSTER_IDS <- if (is.null(GROUP_BY)) {
+        levels(Seurat::Idents(SEURAT_OBJECT))
+    } else {
+        unique(SEURAT_OBJECT@meta.data[[GROUP_BY]])
+    }
+
     N_CLUSTERS <- length(CLUSTER_IDS)
     PALETTE_MAX <- length(MetBrewer::met.brewer(PALETTE))
 
@@ -114,13 +126,15 @@
     )
 
     SCpubr::do_DimPlot(
-    sample = SEURAT_OBJECT,
-    reduction = "umap",
-    pt.size = POINT_SIZE,
-    label = LABEL,
-    label.box = FALSE,
-    label.size = LABEL_SIZE,
-    colors.use = COLORS
+        sample = SEURAT_OBJECT,
+        reduction = REDUCTION,
+        pt.size = POINT_SIZE,
+        split.by = SPLIT_BY,
+        label = LABEL,
+        label.box = FALSE,
+        label.size = LABEL_SIZE,
+        group.by = GROUP_BY,
+        colors.use = COLORS
     )
 }
 
