@@ -1,0 +1,299 @@
+---
+title: "Multimodal data" 
+author: "BS. Mauricio Morales"
+date: "`r Sys.Date()`"
+format:
+    html:
+        theme:
+            dark: darkly
+output: html_document
+editor:
+    markdown:
+        wrap: 60
+---
+
+# Install and load packgages
+
+```{r}
+#| warning: false
+
+packages <- c(
+    "renv",
+    "dplyr",
+    "purrr",
+    "here",
+    "tidyr",
+    "MetBrewer",
+    "ggplot2",
+    "patchwork",
+    "magrittr",
+    "ComplexHeatmap",
+    "devtools",
+    # Single Cell
+    "Seurat",
+    "SeuratObject",
+    "SeuratData",
+    # Single Cell plotting
+    "SCpubr",
+    # Fast Wilcoxon rank sum test and auROC analysis
+    "presto",
+    # Meta-analysis
+    "metap"
+)
+# Install
+installed_packages <- packages %in%
+    rownames(installed.packages())
+if (any(installed_packages == F)) {
+    install.packages(packages[!installed_packages])
+}
+# Load
+suppressPackageStartupMessages({
+    invisible(lapply(packages, library, character.only = T))
+})
+```
+
+# Create project-local library
+
+```{r}
+#| eval: false
+
+# If you add new libraries perform an snapshot
+renv::snapshot()
+# Open configuration files
+usethis::edit_r_environ(scope = "user")
+# Source global helper functions
+source(file = file.path(directory, "src/code_base.R"))
+```
+
+# Set working directory
+
+```{r}
+directory <- here::here()
+```
+
+# Load and set up dataset
+
+```{r}
+#| eval: false
+
+# Install dataset
+SeuratData::InstallData("ifnb")
+
+# Load
+ifnb <- SeuratData::LoadData("ifnb")
+
+# Split the RNA measurements into two layers one for control cells, one for stimulated cells
+ifnb[["RNA"]] %<>% 
+    split(f = ifnb$stim)
+
+# Save
+# saveRDS(
+#     object = ifnb,
+#     file = file.path(
+#         directory,
+#         "outputs",
+#         "02_integration",
+#         paste0(format(Sys.Date(), "%b_%d_%Y"),
+#         "_ifnb_raw.rds")
+#     )
+# )
+```
+
+# Perform analysis without integration
+
+```{r}
+# Create outputs directories if do not exist yet
+fs::dir_create(
+    path = file.path(
+        directory,
+        c("plots", "outputs"),
+        "02_integration"
+    )
+)
+
+# Perform analysis
+ifnb %<>%
+    Seurat::NormalizeData() %>%
+    Seurat::FindVariableFeatures() %>%
+    Seurat::ScaleData() %>%
+    Seurat::RunPCA() %>%
+    Seurat::FindNeighbors(
+        dims = 1:30, 
+        reduction = "pca") %>%
+    Seurat::FindClusters(
+        resolution = 2) %>%
+    Seurat::RunUMAP(
+        dims = 1:30, 
+        reduction = "pca", 
+        reduction.name = "umap.unintegrated")
+
+# Save
+# saveRDS(
+#     object = ifnb,
+#     file = file.path(
+#         directory,
+#         "outputs",
+#         "02_integration",
+#         paste0(format(Sys.Date(), "%b_%d_%Y"),
+#         "_ifnb_processed.rds")
+#     )
+# )
+
+# Call helper function for UMAP
+.stim_umap <- .dim_umap_scpub(
+    SEURAT_OBJECT = ifnb,
+    POINT_SIZE = 1,
+    LABEL = FALSE,
+    REDUCTION = "umap.unintegrated",
+    GROUP_BY = "stim",
+    PALETTE = "Archambault"
+) +
+    ggplot2::ggtitle(
+        "Groups"
+    )
+
+.clusters_umap <- .dim_umap_scpub(
+    SEURAT_OBJECT = ifnb,
+    POINT_SIZE = 1,
+    LABEL = FALSE,
+    REDUCTION = "umap.unintegrated",
+    GROUP_BY = "seurat_clusters",
+    PALETTE = "Signac"
+) + 
+    ggplot2::ggtitle(
+        "Clusters"
+    )
+
+# Save
+# .tiff_pdf_plot(
+#     PLOT = .stim_umap + .clusters_umap,
+#     HEIGHT = 6,
+#     WIDTH = 8,
+#     DIRECTORY = file.path(
+#         directory,
+#         "plots",
+#         "02_integration"),
+#         FILENAME = paste0(
+#             format(Sys.Date(), "%b_%d_%Y"),
+#         "_umap_stim_plus_clusters"))
+```
+
+# Perform analysis with integration
+
+TODO: helper function from code base, generated a misleading umap when using `SCpubr`, **after integration**, check what is the source of this issue. 
+
+DONE: wrong reduction layers for plotting, correction: `integrated.cca` -> `umap` (in plotting)
+
+```{r}
+ifnb.integrated <- Seurat::IntegrateLayers(
+    object = ifnb,
+    method = CCAIntegration,
+    orig.reduction = "pca",
+    new.reduction = "integrated.cca",
+    verbose = FALSE
+    ) %>%
+    SeuratObject::JoinLayers(
+        assay = "RNA"
+    ) %>%
+    Seurat::FindNeighbors(
+        reduction = "integrated.cca",
+        dims = 1:30
+    ) %>%
+    Seurat::FindClusters(
+        resolution = 1
+    ) %>%
+    Seurat::RunUMAP(
+        dims = 1:30, 
+        reduction = "integrated.cca")
+
+# Save
+# saveRDS(
+#     object = ifnb.integrated,
+#     file = file.path(
+#         directory,
+#         "outputs",
+#         "02_integration",
+#         paste0(format(Sys.Date(), "%b_%d_%Y"),
+#         "_ifnb_layers_integrated.rds")
+#     )
+# )
+
+# UMAP post layer integration
+.stim_umap <- .dim_umap_scpub(
+    SEURAT_OBJECT = ifnb.integrated,
+    POINT_SIZE = 1,
+    LABEL = FALSE,
+    REDUCTION = "umap",
+    GROUP_BY = "stim",
+    PALETTE = "Archambault") +
+    ggplot2::ggtitle(
+        "Groups")
+
+.clusters_umap <- .dim_umap_scpub(
+    SEURAT_OBJECT = ifnb.integrated,
+    POINT_SIZE = 1,
+    LABEL = FALSE,
+    REDUCTION = "umap",
+    GROUP_BY = "seurat_annotations",
+    PALETTE = "Signac") + 
+    ggplot2::ggtitle(
+        "Clusters")
+
+# Save
+# .tiff_pdf_plot(
+#     PLOT = .stim_umap + .clusters_umap,
+#     HEIGHT = 6,
+#     WIDTH = 8,
+#     DIRECTORY = file.path(
+#         directory,
+#         "plots",
+#         "02_integration"),
+#         FILENAME = paste0(
+#             format(Sys.Date(), "%b_%d_%Y"),
+#         "_umap_stim_plus_clusters_layers_integrated"))
+
+# UMAP sply by facet based on stim
+.clusters_umap_split <- .dim_umap_scpub(
+    SEURAT_OBJECT = ifnb.integrated,
+    POINT_SIZE = 1,
+    LABEL = FALSE,
+    REDUCTION = "umap",
+    SPLIT_BY = "seurat_clusters",
+    GROUP_BY = "stim",
+    PALETTE = "Archambault") + 
+    ggplot2::ggtitle(
+        "Clusters")
+
+# Save
+# .tiff_pdf_plot(
+#     PLOT = .clusters_umap_split,
+#     HEIGHT = 12,
+#     WIDTH = 12,
+#     DIRECTORY = file.path(
+#         directory,
+#         "plots",
+#         "02_integration"),
+#         FILENAME = paste0(
+#             format(Sys.Date(), "%b_%d_%Y"),
+#         "_umap_stim_split_layers_integrated"
+#         ))
+```
+
+# Identify conserved markers
+
+```{r}
+# NK example
+NK_MARKERS <- ifnb.integrated %>%
+    Seurat::SetIdent(value = "seurat_annotations") %>%
+    Seurat::FindConservedMarkers(
+        ident.1 = "NK",
+        grouping.var = "stim",
+        verbose = FALSE
+    )
+
+
+```
+
+```{r}
+sessionInfo()
+```
