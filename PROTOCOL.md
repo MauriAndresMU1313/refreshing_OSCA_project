@@ -22,3 +22,19 @@
 - Setting enviroment to work with Docker-renv (exploration): [Using renv with Docker](https://rstudio.github.io/renv/articles/docker.html).
     - Not necessary for now, at least until the project is done.
 - Seurat integration for [Single Cell Analysis: Seurat](https://satijalab.org/seurat/).
+
+## Jun 19 to Jul 12
+
+- Workflows performed:
+    1. Exploratory analysis.
+    2. Multimodal analysis.
+    3. Essential commands. 
+    4. Introduction to single cell with integration analysis. 
+
+- No major changes in terms of `envs`, due to the correct use of `renv` library.
+
+# Jul 12 to 20 
+
+- Workflows performed:
+    1. Single cell integration.
+    2. Exploration of different functions commonly use it for alternative integration strategies.
