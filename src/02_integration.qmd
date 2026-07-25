@@ -291,7 +291,179 @@ NK_MARKERS <- ifnb.integrated %>%
         verbose = FALSE
     )
 
+# Set annotations
+Seurat::Idents(ifnb.integrated) <- "seurat_annotations"
 
+# Order by factor
+Seurat::Idents(ifnb.integrated) <- factor(Seurat::Idents(ifnb.integrated), levels = c(
+    "pDC", 
+    "Eryth", 
+    "Mk", 
+    "DC", 
+    "CD14 Mono", 
+    "CD16 Mono",
+    "B Activated", 
+    "B", 
+    "CD8 T", 
+    "NK", 
+    "T activated", 
+    "CD4 Naive T", 
+    "CD4 Memory T"))
+
+# Markers
+.markers_plot <- c(
+    "CD3D", "CREM", "HSPH1", 
+    "SELL", "GIMAP5", "CACYBP", 
+    "GNLY", "NKG7", "CCL5",
+    "CD8A", "MS4A1", "CD79A", 
+    "MIR155HG", "NME1", "FCGR3A", 
+    "VMO1", "CCL2", "S100A9", 
+    "HLA-DQA1", "GPR183", "PPBP", 
+    "GNG11", "HBA2", "HBB", 
+    "TSPAN13", "IL3RA", "IGJ", 
+    "PRSS57")
+
+# Dot plot to explore conserved markers across conditions
+.conversved_markers <- .dot_plot_cons_markers(
+    SEURAT_OBJECT = ifnb.integrated,
+    MARKERS = .markers_plot,
+    SPLIT_BY = "stim",
+    DOT_SCALE = 8,
+    TITLE = "Conserved markers across conditions"
+)
+
+# Save
+# .tiff_pdf_plot(
+#     PLOT = .conversved_markers,
+#     HEIGHT = 12,
+#     WIDTH = 14,
+#     DIRECTORY = file.path(
+#         directory,
+#         "plots",
+#         "02_integration"),
+#         FILENAME = paste0(
+#             format(Sys.Date(), "%b_%d_%Y"),
+#             "_conserved_markers_stim"
+#     )
+# )
+
+# Aggregate expression
+aggregate_ifnb <- Seurat::AggregateExpression(
+    ifnb.integrated, 
+    group.by = c("seurat_annotations", "stim"), 
+    return.seurat = TRUE)
+
+# Save
+# saveRDS(
+#     object = aggregate_ifnb,
+#     file = file.path(
+#         directory,
+#         "outputs", 
+#         "02_integration",
+#         paste0(format(Sys.Date(), "%b_%d_%Y"), 
+#         "_aggregate_ifnb.rds")
+#     )
+# )
+
+# Labels
+genes_label = c(
+    "ISG15", "LY6E", "IFI6", 
+    "ISG20", "MX1", "IFIT2", 
+    "IFIT1", "CXCL10", "CCL8")
+
+# Plot
+.cd4_comparison_stim <- .cell_scatter_comparison(
+    AGGREGATE_OBJECT = aggregate_ifnb,
+    CELL_TYPES = c("CD14 Mono", "CD4 Naive T"),
+    CONDITION_1 = "CTRL",
+    CONDITION_2 = "STIM",
+    MARKERS = genes_label,
+    COLUMNS = 2,
+    SIZE = 7
+)
+
+# Save
+# .tiff_pdf_plot(
+#     PLOT = .cd4_comparison_stim,
+#     HEIGHT = 6,
+#     WIDTH = 18,
+#     DIRECTORY = file.path(
+#         directory,
+#         "plots",
+#         "02_integration"),
+#         FILENAME = paste0(
+#             format(Sys.Date(), "%b_%d_%Y"),
+#             "_cd4_stim_comparison"
+#     )
+# )
+
+# Identifying which genes change within a specific cell type due to stimulation
+b_ifn_response <- ifnb.integrated %>%
+    Seurat::AddMetaData(
+        metadata = paste(
+            ifnb.integrated$seurat_annotations,
+            ifnb.integrated$stim,
+            sep = "_"
+        ),
+        col.name = "celltype.stim"
+    ) %>%
+    Seurat::SetIdent(value = "celltype.stim") %>%
+    Seurat::FindMarkers(
+        ident.1 = "B_STIM",
+        ident.2 = "B_CTRL",
+        verbose = FALSE
+    )
+
+# UMAP
+.stim_feature <- .feature_plot_markers(
+    SEURAT_OBJECT = ifnb.integrated,
+    MARKERS = c("CD3D", "GNLY", "IFI6"),
+    SPLIT_BY = "stim",
+    MAX_CUTOFF = 3,
+    PALETTE = "Oranges",
+    REDUCTION = "umap",
+    COLUMNS = 1
+)
+
+# Save
+# .tiff_pdf_plot(
+#     PLOT = .stim_feature,
+#     HEIGHT = 8,
+#     WIDTH = 8,
+#     DIRECTORY = file.path(
+#         directory,
+#         "plots",
+#         "02_integration"),
+#         FILENAME = paste0(
+#             format(Sys.Date(), "%b_%d_%Y"),
+#         "_feature_stim_cd3d_gnly_ifi6"
+#     )
+# )
+
+# Violin plot by stim-selected markers
+.stim_vln <- .vln_plot_markers(
+    SEURAT_OBJECT = ifnb.integrated,
+    MARKERS = c("LYZ", "ISG15", "CXCL10"),
+    PALETTE = "Archambault",
+    COLUMNS = 1,
+    SPLIT_BY = "stim",
+    GROUP_BY = "seurat_annotations"
+)
+
+# Save
+# .tiff_pdf_plot(
+#     PLOT = .stim_vln,
+#     HEIGHT = 10,
+#     WIDTH = 8,
+#     DIRECTORY = file.path(
+#         directory,
+#         "plots",
+#         "02_integration"),
+#         FILENAME = paste0(
+#             format(Sys.Date(), "%b_%d_%Y"),
+#             "_vln_stim_lyz_isg15_cxcl10"
+#         )
+#     )
 ```
 
 ```{r}
