@@ -38,3 +38,9 @@
 - Workflows performed:
     1. Single cell integration.
     2. Exploration of different functions commonly use it for alternative integration strategies.
+
+# Jul 20 to Aug 01
+
+- Workflow performed:
+    1. Integration of reference into single-cell workflow.
+    2. Failure to integrate `Azimuth` into the workflow due to incompatibility with MacOS. However, `Docker` image is available in case is need it. 
