@@ -1,0 +1,325 @@
+---
+title: "Mapping and annotating query datasets" 
+author: "BS. Mauricio Morales"
+date: "`r Sys.Date()`"
+format:
+    html:
+        theme:
+            dark: darkly
+output: html_document
+editor:
+    markdown:
+        wrap: 60
+---
+
+# Install and load packgages
+
+```{r}
+#| warning: false
+
+packages <- c(
+    "renv",
+    "dplyr",
+    "purrr",
+    "here",
+    "tidyr",
+    "MetBrewer",
+    "ggplot2",
+    "patchwork",
+    "magrittr",
+    "ComplexHeatmap",
+    "devtools",
+    # Single Cell
+    "Seurat",
+    "SeuratObject",
+    "SeuratData",
+    # Single Cell plotting
+    "SCpubr"
+)
+# Install
+installed_packages <- packages %in%
+    rownames(installed.packages())
+if (any(installed_packages == F)) {
+    install.packages(packages[!installed_packages])
+}
+# Load
+suppressPackageStartupMessages({
+    invisible(lapply(packages, library, character.only = T))
+})
+```
+
+# Create project-local library
+
+```{r}
+#| eval: false
+
+# If you add new libraries perform an snapshot
+renv::snapshot()
+
+# Open configuration files
+usethis::edit_r_environ(scope = "user")
+
+# Source global helper functions
+source(file = file.path(directory, "src/code_base.R"))
+```
+
+# Set working directory
+
+```{r}
+directory <- here::here()
+```
+
+# Load data
+
+```{r}
+# Download data
+SeuratData::InstallData("panc8")
+
+# Load data
+panc8 <- SeuratData::LoadData("panc8")
+
+# Technologies for the reference
+pancreas_ref <- subset(
+    panc8, 
+    tech %in% c("celseq2", "smartseq2")
+)
+
+pancreas_ref[["RNA"]] %<>% split(f = pancreas_ref$tech)
+```
+
+# Pre process data without and with integration
+```{r}
+pancreas_ref %<>%
+    Seurat::NormalizeData() %>%
+    Seurat::FindVariableFeatures() %>%
+    Seurat::ScaleData() %>%
+    Seurat::RunPCA() %>%
+    Seurat::FindNeighbors(
+        dims = 1:30
+    ) %>%
+    Seurat::FindClusters() %>%
+    Seurat::RunUMAP( 
+        dims = 1:30)
+
+# Create directories for workflow
+fs::dir_create(path = file.path(
+    directory,
+    c("outputs", "plots"),
+    "03_mapping_annotating_query"
+))
+
+# Save
+# saveRDS(
+#     object = pancreas_ref, 
+#     file = file.path(
+#         directory,
+#         "outputs",
+#         "03_mapping_annotating_query",
+#     paste0(format(Sys.Date(), "%b_%d_%Y"),
+#     "_pancreas_ref_preprocessed_nonintegration.rds")
+# ))
+
+# UAMP
+.tech <- .dim_umap_scpub(
+    pancreas_ref,
+    POINT_SIZE = 1,
+    GROUP_BY = "tech",
+    PALETTE = "Archambault"
+    ) + 
+        ggplot2::ggtitle(
+            "UMAP by Tecnology")
+
+.celltype <- .dim_umap_scpub(
+    pancreas_ref,
+    POINT_SIZE = 1,
+    GROUP_BY = "celltype",
+    PALETTE = "Signac"
+    ) + 
+        ggplot2::ggtitle(
+            "UMAP by Cell Type")
+
+# Save
+# purrr::walk2(
+#     list(.tech, .celltype),
+#     c("umap_by_tech", "umap_by_celltype"),
+#     ~ .tiff_pdf_plot(
+#         PLOT = .x,
+#         HEIGHT = 6,
+#         WIDTH = 6,
+#         DIRECTORY = file.path(directory, 
+#         "plots", 
+#         "03_mapping_annotating_query"),
+#         FILENAME = paste0(format(Sys.Date(), 
+#         "%b_%d_%Y"), 
+#         "_", .y)
+#     )
+# )
+
+# Integrate data set into a shared reference
+pancreas_ref %<>% 
+    Seurat::IntegrateLayers(
+        method = CCAIntegration, 
+        orig.reduction = "pca",
+        new.reduction = "integrated.cca",
+        verbose = FALSE
+    ) %>%
+    Seurat::FindNeighbors(
+        reduction = "integrated.cca",
+        dims = 1:30
+    ) %>%
+    Seurat::FindClusters() %>%
+    Seurat::RunUMAP(
+        reduction = "integrated.cca",
+        dims = 1:30)
+
+# Plot
+.tech <- .dim_umap_scpub(
+    pancreas_ref,
+    POINT_SIZE = 1,
+    GROUP_BY = "tech",
+    PALETTE = "Archambault"
+    ) + 
+        ggplot2::ggtitle(
+            "UMAP by Tecnology")
+
+.celltype <- .dim_umap_scpub(
+    pancreas_ref,
+    POINT_SIZE = 1,
+    GROUP_BY = "celltype",
+    PALETTE = "Signac"
+    ) + 
+        ggplot2::ggtitle(
+            "UMAP by Cell Type")
+
+# Save
+# purrr::walk2(
+#     list(.tech, .celltype),
+#     c("integrated_umap_tech", "integrated_umap_celltype"),
+#     ~ .tiff_pdf_plot(
+#         PLOT = .x,
+#         HEIGHT = 6,
+#         WIDTH = 6,
+#         DIRECTORY = file.path(
+#             directory,
+#             "plots",
+#             "03_mapping_annotating_query"),
+#         FILENAME = paste0(format(Sys.Date(), "%b_%d_%Y"),
+#         "_", .y)
+#         )
+#     )
+```
+
+# Cell classification using an integrated reference
+
+```{r}
+# Select technologies for the query
+pancreas_query <- subset(
+    x = panc8,
+    tech %in% c("fluidigmc1", "celseq")
+) %>%
+    Seurat::NormalizeData()
+
+pancreas_anchors <- Seurat::FindTransferAnchors(
+    reference = pancreas_ref,
+    query = pancreas_query,
+    dims = 1:30,
+    reference.reduction = "pca"
+)
+
+# Add metadata
+pancreas_query %<>% Seurat::AddMetaData(
+    metadata = Seurat::TransferData(
+        anchorset = pancreas_anchors,
+        refdata = pancreas_ref$celltype,
+        dims = 1:30
+    )
+)
+
+# Check prediction
+pancreas_query$prediction_match <- pancreas_query$predicted.id == pancreas_query$celltype
+
+# Correct label assign
+table(pancreas_query$prediction_match)
+
+# Examine canonical cell type markers
+table(pancreas_query$predicted.id)
+
+# Violin
+.vln_markers <- .vln_plot_markers(
+    SEURAT_OBJECT = pancreas_query,
+    MARKERS = c("REG1A", "PPY", "SST", "GHRL", "VWF", "SOX10"),
+    GROUP_BY = "predicted.id",
+    PALETTE = "Signac"
+)
+
+# Save
+# .tiff_pdf_plot(
+#     PLOT = .vln_markers,
+#     HEIGHT = 12,
+#     WIDTH = 12,
+#     DIRECTORY = file.path(
+#         directory,
+#         "plots",
+#         "03_mapping_annotating_query"),
+#     FILENAME = paste0(format(Sys.Date(), "%b_%d_%Y"),
+#     "_vln_reg1a_ppy_sst_ghrl_vwf_sox10"))
+```
+
+# Unimodal UMAP projection
+
+```{r}
+# Enable projection of a query onto the reference
+pancreas_ref %<>%
+    Seurat::RunUMAP(
+        dims = 1:30,
+        reduction = "integrated.cca",
+        return.model = TRUE
+    )
+
+# Map query
+pancreas_query %<>%
+    Seurat::MapQuery(
+        anchorset = pancreas_anchors,
+        reference = pancreas_ref,
+        refdata = list(celltype = "celltype"),
+        reference.reduction = "pca",
+        reduction.model = "umap"
+    )
+
+# UMAP
+.ref_umap <- .dim_umap_scpub(
+    SEURAT_OBJECT = pancreas_ref,
+    REDUCTION = "umap",
+    GROUP_BY = "celltype",
+    POINT_SIZE = 1,
+    LABEL = TRUE,
+    PALETTE = "Signac"
+) + ggplot2::ggtitle("Reference annotations") +
+    ggplot2::theme(legend.position = "none")
+
+.query_umap <- .dim_umap_scpub(
+    SEURAT_OBJECT = pancreas_query,
+    REDUCTION = "ref.umap",
+    GROUP_BY = "predicted.celltype",
+    LABEL = TRUE,
+    POINT_SIZE = 1,
+    PALETTE = "Signac"
+) + ggplot2::ggtitle("Query transferred labels") +
+    ggplot2::theme(legend.position = "none")
+
+# Save
+.tiff_pdf_plot(
+    PLOT = .ref_umap + .query_umap,
+    HEIGHT = 10,
+    WIDTH = 10,
+    DIRECTORY = file.path(
+        directory,
+        "plots",
+        "03_mapping_annotating_query"),
+    FILENAME = paste0(format(Sys.Date(), "%b_%d_%Y"),
+    "_umap_ref_vs_query")) 
+```
+
+```{r}
+sessionInfo()
+```
