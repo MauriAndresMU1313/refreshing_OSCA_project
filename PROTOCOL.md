@@ -23,7 +23,7 @@
     - Not necessary for now, at least until the project is done.
 - Seurat integration for [Single Cell Analysis: Seurat](https://satijalab.org/seurat/).
 
-## Jun 19 to Jul 12
+## Jun 19 to Jul 12, 2026
 
 - Workflows performed:
     1. Exploratory analysis.
@@ -33,13 +33,13 @@
 
 - No major changes in terms of `envs`, due to the correct use of `renv` library.
 
-# Jul 12 to 20 
+## Jul 12 to 20, 2026
 
 - Workflows performed:
     1. Single cell integration.
     2. Exploration of different functions commonly use it for alternative integration strategies.
 
-# Jul 20 to Aug 01
+## Jul 20 to Aug 01, 2026
 
 - Workflow performed:
     1. Integration of reference into single-cell workflow.
