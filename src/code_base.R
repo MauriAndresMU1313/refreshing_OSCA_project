@@ -187,7 +187,8 @@
     COLUMNS = NULL,
     ASSAY = NULL,
     SPLIT_BY = NULL,
-    GROUP_BY = NULL) {
+    GROUP_BY = NULL,
+    LEGEND_POSITION = NULL) {
     #' Violin plots for marker genes arranged in a grid
     #'
     #' @param SEURAT_OBJECT post marker identification
@@ -197,6 +198,7 @@
     #' @param ASSAY Assay to use
     #' @param SPLIT_BY metadata column to split plots by condition
     #' @param GROUP_BY metadata column to group cells by
+    #' @param LEGEND_POSITION string `none`, `bottom;top;right;left`
     #' @return patchwork grid
 
     # Handle SPLIT_BY or GROUP_BY
@@ -234,7 +236,7 @@
     )) %>%
         patchwork::wrap_plots(ncol = COLUMNS) +
         patchwork::plot_layout(guides = "collect") &
-        ggplot2::theme(legend.position = "bottom")
+        ggplot2::theme(legend.position = LEGEND_POSITION)
 }
 
 .dot_plot_cons_markers <- function(
