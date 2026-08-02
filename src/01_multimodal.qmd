@@ -70,8 +70,7 @@ directory <- here::here()
 
 # Load data sets
 
-# Note 1: dataset contains ~5% of mouse cells, which we can use as negative
-# controls for the protein measurements (HUMAN_ and MOUSE_ string in features)
+Note 1: dataset contains ~5% of mouse cells, which we can use as negative controls for the protein measurements (HUMAN_ and MOUSE_ string in features)
 
 ```{r}
 # RNA
