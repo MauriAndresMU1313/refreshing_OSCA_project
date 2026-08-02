@@ -1,0 +1,246 @@
+---
+title: "Dictionary Learning for cross-modality integration" 
+author: "BS. Mauricio Morales"
+date: "`r Sys.Date()`"
+format:
+    html:
+        theme:
+            dark: darkly
+output: html_document
+editor:
+    markdown:
+        wrap: 60
+---
+
+# Install and load packgages
+
+```{r}
+#| warning: false
+
+packages <- c(
+    "renv",
+    "dplyr",
+    "purrr",
+    "here",
+    "tidyr",
+    "MetBrewer",
+    "ggplot2",
+    "patchwork",
+    "magrittr",
+    "ComplexHeatmap",
+    "devtools",
+    "magrittr",
+    # Single Cell
+    "Seurat",
+    "SeuratObject",
+    "SeuratData",
+    # Single Cell plotting
+    "SCpubr",
+    # Single-cell chromatin data
+    "Signac",
+    # Genome related
+    "GenomeInfoDb",
+    "EnsDb.Hsapiens.v86",
+    # Python alternatives
+    "reticulate"
+)
+# Install
+installed_packages <- packages %in%
+    rownames(installed.packages())
+if (any(installed_packages == F)) {
+    install.packages(packages[!installed_packages])
+}
+# Load
+suppressPackageStartupMessages({
+    invisible(lapply(packages, library, character.only = T))
+})
+```
+
+# Create project-local library
+
+```{r}
+#| eval: false
+
+# If you add new libraries perform an snapshot
+renv::snapshot()
+
+# Open configuration files
+usethis::edit_r_environ(scope = "user")
+
+# Source global helper functions
+source(file = file.path(directory, "src/code_base.R"))
+```
+
+# Set working directory
+
+```{r}
+directory <- here::here()
+
+# Allocate 10GB of memory
+options(future.globals.maxSize = 10 * 1024^3)
+```
+
+# Set uv enviroment
+
+Note 1: due to incompatibility with MacOS and `hdf5r`, alternative libraries will be use. `Python` is suitable for this: `reticulate`. 
+
+Note 2: `uv` for virtual env management was used:
+- Activate via Positron.
+- Installed via brew in bash-terminal.
+- Sync same version present in Positron via `❯ uv venv ~/.virtualenvs/r-reticulate-311 --python 3.13`
+- Install libraries before calling `py_require`: `uv pip install --python ~/.virtualenvs/r-reticulate-313/bin/python "numpy<2.5" scanpy`
+
+```{r}
+# Indicate virtual env path (using uv)
+reticulate::use_virtualenv("~/.virtualenvs/r-reticulate-313", required = TRUE)
+```
+
+# Load the bridge, query, and reference datasets
+
+## Load and setup the 10x multiome object
+
+Note 3: to proceed with the tutorial is necessary to workaround with solutions to avoid `hdf5r` library or related dependencies. Strategy: use `scanpy` to read files and proceed with proper conversion before start working with `seurat`.
+
+```{r}
+# Initialize library (`convert = FALSE` prevent for `Python`->`R` conversion)
+sc <- reticulate::import("scanpy", convert = FALSE)
+
+# Read file
+input10x_h5 <- sc$read_10x_h5(
+    file.path(
+        directory,
+        "inputs",
+        "cross_modality_integration",
+        "pbmc_granulocyte_sorted_10k_filtered_feature_bc_matrix.h5"
+    ),
+    gex_only = FALSE
+)
+
+# Remove duplicates
+input10x_h5$var_names_make_unique()
+
+# Extract features
+feature_types <- reticulate::py_to_r(input10x_h5$var$feature_types$tolist())
+rna_idx <- feature_types == "Gene Expression"
+atac_idx <- feature_types == "Peaks"
+
+# Get cell and feature names
+cell_names <- reticulate::py_to_r(input10x_h5$obs_names$tolist())
+feature_names <- reticulate::py_to_r(input10x_h5$var_names$tolist())
+
+# Convert sparse matrix
+x_csc <- input10x_h5$X$tocsc()
+count_mtx <- reticulate::py_to_r(x_csc)
+count_mtx <- Matrix::t(count_mtx)
+
+# Assign column names
+colnames(count_mtx) <- cell_names
+rownames(count_mtx) <- feature_names
+
+# Split modalities
+rna_counts <- count_mtx[rna_idx, ]
+atac_counts <- count_mtx[atac_idx, ]
+
+# Create Seurat object with RNA
+obj_multi <- Seurat::CreateSeuratObject(counts = rna_counts)
+
+# Create directories
+fs::dir_create(
+    path = file.path(
+        directory,
+        c("outputs", "plots"),
+        "04_cross_modality_integration"))
+
+# Save
+# saveRDS(
+#     object = obj_multi,
+#     file = file.path(
+#         directory,
+#         "outputs",
+#         "04_cross_modality_integration",
+#         paste0(format(Sys.Date(), 
+#         "%b_%d_%Y"),
+#         "_pbmc_granulocyte_rna_filtered_feature_bc_raw_seurat.rds")))
+
+# Mitochondrial percentage
+obj_multi[["percent.mt"]] <- Seurat::PercentageFeatureSet( 
+    obj_multi,
+    pattern = "^MT-"
+)
+
+# ATAC - filter to standard chromosomes
+grange_counts <- Signac::StringToGRanges(
+    rownames(atac_counts),
+    sep = c(":", "-")
+)
+grange_use <- GenomeInfoDb::seqnames(grange_counts) %in%
+    GenomeInfoDb::standardChromosomes(grange_counts)
+atac_counts <- atac_counts[as.vector(grange_use), ]
+
+# Gene annotations
+annotations <- Signac::GetGRangesFromEnsDb(
+    ensdb = EnsDb.Hsapiens.v86::EnsDb.Hsapiens.v86
+)
+GenomeInfoDb::seqlevelsStyle(annotations) <- "UCSC"
+GenomeInfoDb::genome(annotations) <- "hg38"
+
+# Create chromatin assay
+chrom_assay <- Signac::CreateChromatinAssay(
+    counts = atac_counts,
+    sep = c(":", "-"),
+    genome = "hg38",
+    fragments = file.path(
+        directory,
+        "inputs",
+        "cross_modality_integration",
+        "pbmc_granulocyte_sorted_10k_atac_fragments.tsv.gz"
+    ),
+    min.cells = 10,
+    annotation = annotations
+)
+
+# Save
+# saveRDS(
+#     object = chrom_assay,
+#     file = file.path(
+#         directory,
+#         "outputs",
+#         "04_cross_modality_integration",
+#         paste0(format(Sys.Date(), 
+#         "%b_%d_%Y"),
+#         "_pbmc_granulocyte_atac_filtered_feature_bc_raw_seurat.rds")))
+
+# Add ATAC assay
+obj_multi[["ATAC"]] <- chrom_assay
+
+# QC filter
+obj_multi %<>% subset(
+    subset = nCount_ATAC < 7e4 &
+        nCount_ATAC > 5e3 &
+        nCount_RNA < 25000 &
+        nCount_RNA > 1000 &
+        percent.mt < 20
+)
+
+# Save
+# saveRDS(
+#     object = obj_multi,
+#     file = file.path(
+#         directory,
+#         "outputs",
+#         "04_cross_modality_integration",
+#         paste0(format(Sys.Date(),
+#         "%b_%d_%Y"),
+#         "_pbmc_post_qc_rna_atac.rds")))
+```
+
+## Load and setup the 10x scATAC-seq query 
+
+```{r}
+# Clean env
+rm(list = setdiff(ls(), c("directory", "obj_multi", "input10x_h5")))
+```
+
+```{r}
+sessionInfo()
+```
