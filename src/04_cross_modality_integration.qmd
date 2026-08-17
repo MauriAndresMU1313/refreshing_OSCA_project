@@ -208,7 +208,7 @@ chrom_assay <- Signac::CreateChromatinAssay(
 #         "04_cross_modality_integration",
 #         paste0(format(Sys.Date(), 
 #         "%b_%d_%Y"),
-#         "_pbmc_granulocyte_atac_filtered_feature_bc_raw_seurat.rds")))
+#         "_pbmc_granulocyte_multiome_filtered_feature_bc_raw_seurat.rds")))
 
 # Add ATAC assay
 obj_multi[["ATAC"]] <- chrom_assay
@@ -231,7 +231,7 @@ obj_multi %<>% subset(
 #         "04_cross_modality_integration",
 #         paste0(format(Sys.Date(),
 #         "%b_%d_%Y"),
-#         "_pbmc_post_qc_rna_atac.rds")))
+#         "_pbmc_post_qc_rna_multiome.rds")))
 ```
 
 ## Load and setup the 10x scATAC-seq query 
@@ -239,6 +239,186 @@ obj_multi %<>% subset(
 ```{r}
 # Clean env
 rm(list = setdiff(ls(), c("directory", "obj_multi", "input10x_h5")))
+
+# Initialize library (`convert = FALSE` prevents Python->R auto-conversion)
+sc <- reticulate::import("scanpy", convert = FALSE)
+
+# Load ATAC dataset
+input10x_atac <- sc$read_10x_h5(
+    file.path(
+        directory,
+        "inputs",
+        "cross_modality_integration",
+        "10k_PBMC_ATAC_nextgem_Chromium_X_filtered_peak_bc_matrix.h5"
+    ),
+    gex_only = FALSE
+)
+
+# Make variable names unique
+input10x_atac$var_names_make_unique()
+
+# Extract count matrix
+cell_names <- reticulate::py_to_r(input10x_atac$obs_names$tolist())
+feature_names <- reticulate::py_to_r(input10x_atac$var_names$tolist())
+
+atac_pbmc_data <- input10x_atac$X$tocsc() |>
+    reticulate::py_to_r() |>
+    Matrix::t()
+
+colnames(atac_pbmc_data) <- cell_names
+rownames(atac_pbmc_data) <- feature_names
+
+# Get gene annotations
+annotation <- Signac::GetGRangesFromEnsDb(
+    ensdb = EnsDb.Hsapiens.v86::EnsDb.Hsapiens.v86
+)
+GenomeInfoDb::seqlevelsStyle(annotation) <- "UCSC"
+
+# Create ChromatinAssay for ATAC data
+atac_pbmc_assay <- Signac::CreateChromatinAssay(
+    counts = atac_pbmc_data,
+    sep = c(":", "-"),
+    fragments = file.path(
+        directory,
+        "inputs",
+        "cross_modality_integration",
+        "10k_PBMC_ATAC_nextgem_Chromium_X_fragments.tsv.gz"
+    ),
+    annotation = annotation
+)
+
+# Requantify query ATAC to match multiome features
+requant_multiome_atac <- Signac::FeatureMatrix(
+    fragments = Signac::Fragments(atac_pbmc_assay),
+    features = Signac::granges(obj_multi[["ATAC"]]),
+    cells = Seurat::Cells(atac_pbmc_assay)
+)
+
+# Create assay with requantified ATAC data
+atac_assay <- Signac::CreateChromatinAssay(
+    counts = requant_multiome_atac,
+    fragments = file.path(
+        directory,
+        "inputs",
+        "cross_modality_integration",
+        "10k_PBMC_ATAC_nextgem_Chromium_X_fragments.tsv.gz"
+    ),
+    annotation = annotation
+)
+
+# Create Seurat object
+obj_atac <- Seurat::CreateSeuratObject(
+    counts = atac_assay,
+    assay = "ATAC")
+
+# Save
+# saveRDS(
+#     object = obj_atac,
+#     file = file.path(
+#         directory,
+#         "outputs",
+#         "04_cross_modality_integration",
+#         paste0(format(Sys.Date(), "%b_%d_%Y"),
+#         "-pbmc_granulocyte_atac_filtered_feature_bc_raw_seurat")
+#     )
+# )
+
+obj_atac[["peak.orig"]] <- atac_pbmc_assay
+
+# Apply filtering
+obj_atac %<>% subset(
+    subset = nCount_ATAC < 7e4 & nCount_ATAC > 2000)
+```
+
+# Load reference dataset
+
+Note 4: Unable to finish this script due to memory limitations and `rhdf5` incompatibility. The rest of the script will be keep it **without checking the functionality** from this point until the end.
+
+Note 5: vector limitation size is the main reason that block the load of the `rds` object.
+
+```{r}
+ref_rna <- readRDS(
+    file.path(
+        directory,
+        "inputs",
+        "cross_modality_integration",
+        "pbmc_multimodal_2023.rds"))
+```
+
+# Prepocessing and normalization
+
+```{r}
+# Multiome RNA by SCTransform
+Seurat::DefaultAssay(obj_multi) <- "RNA"
+obj_multi %<>% Seurat::SCTransform(verbose = FALSE)
+
+# Multiome ATAC by TF-IDF normalization
+Seurat::DefaultAssay(obj_multi) <- "ATAC"
+obj_multi %<>% Signac::RunTFIDF()
+obj_multi %<>% Signac::FindTopFeatures(min.cutoff = "q0")
+
+# Query ATAC
+obj_atac %<>% Signac::RunTFIDF()
+```
+
+# Bridge integration
+
+```{r}
+# Dimensions: drop first LSI dimension (captures sequencing depth, not biology)
+dims_atac <- 2:50
+dims_rna <- 1:50
+
+Seurat::DefaultAssay(obj_multi) <- "RNA"
+Seurat::DefaultAssay(obj_rna) <- "SCT"
+
+# Build extended reference using bridge dataset
+obj_rna_ext <- Seurat::PrepareBridgeReference(
+    reference = obj_rna,
+    bridge = obj_multi,
+    reference.reduction = "spca",
+    reference.dims = dims_rna,
+    normalization.method = "SCT"
+)
+
+# Find anchors across modalities
+bridge_anchor <- Seurat::FindBridgeTransferAnchors(
+    extended.reference = obj_rna_ext,
+    query = obj_atac,
+    reduction = "lsiproject",
+    dims = dims_atac
+)
+
+# Map query onto reference
+obj_atac %<>% Seurat::MapQuery(
+    anchorset = bridge_anchor,
+    reference = obj_rna_ext,
+    refdata = list(
+        l1 = "celltype.l1",
+        l2 = "celltype.l2",
+        l3 = "celltype.l3"
+    ),
+    reduction.model = "wnn.umap"
+)
+```
+
+# Plotting exploration
+
+```{r}
+# Unsupervised ATAC processing for validation
+obj_atac %<>%
+    Signac::FindTopFeatures(min.cutoff = "q0") %>%
+    Signac::RunSVD() %>%
+    Seurat::RunUMAP(reduction = "lsi", dims = 2:50)
+
+# Coverage plots at canonical loci
+Signac::CoveragePlot(
+    obj_atac,
+    region = "PAX5",
+    group.by = "predicted.l1",
+    idents = c("B", "CD4 T", "Mono", "NK"),
+    window = 200,
+    extend.upstream = -150000
+)
 ```
 
 ```{r}
