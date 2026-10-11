@@ -1,0 +1,100 @@
+---
+title: "WNN analysis of CITE-seq, RNA + ADT"
+author: "Mauricio Morales"
+date: "`r Sys.Date()`"
+format:
+  html:
+    theme: cyborg
+    embed-resources: true
+    code-fold: true
+---
+
+# Install and load packgages
+
+```{r}
+#| warning: false
+
+.packages <- c(
+    "renv",
+    "dplyr",
+    "purrr",
+    "here",
+    "tidyr",
+    "magrittr",
+    "devtools",
+    # Plot
+    "ComplexHeatmap",
+    "MetBrewer",
+    "ggplot2",
+    "patchwork",
+    "cowplot",
+    # Single Cell
+    "Seurat",
+    "SeuratData",
+    # Single Cell plotting
+    "SCpubr",
+    # Python alternatives
+    "reticulate"
+)
+# Install
+.installed_packages <- .packages %in%
+    rownames(installed.packages())
+if (any(.installed_packages == F)) {
+    install.packages(.packages[!.installed_packages])
+}
+# Load
+suppressPackageStartupMessages({
+    invisible(lapply(.packages, library, character.only = T))
+})
+```
+
+# Set working directory
+
+```{r}
+directory <- here::here()
+```
+
+# Load dataset
+
+```{r}
+# Install
+SeuratData::InstallData("bmcite")
+
+bm <- SeuratData::LoadData(ds = "bmcite")
+```
+
+# Process
+
+```{r}
+Seurat::DefaultAssay(bm) <- 'RNA'
+
+bm <- Seurat::NormalizeData(bm) %>%
+  Seurat::FindVariableFeatures() %>%
+  Seurat::ScaleData() %>%
+  Seurat::RunPCA()
+
+Seurat::DefaultAssay(bm) <- 'ADT'
+
+Seurat::VariableFeatures(bm) <- rownames(bm[["ADT"]])
+
+bm <- Seurat::NormalizeData(
+  bm,
+  normalization.method = 'CLR',
+  # Normalize within cells
+  margin = 2
+) %>%
+  Seurat::ScaleData() %>%
+  Seurat::RunPCA(reduction.name = 'apca')
+
+# Calculates the closest neighbors in the dataset
+bm <- Seurat::FindMultiModalNeighbors(
+  bm,
+  reduction.list = list("pca", "apca"),
+  dims.list = list(1:30, 1:18),
+  modality.weight.name = "RNA.weight"
+)
+```
+
+```{r}
+sessionInfo()
+```
