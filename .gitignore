@@ -9,6 +9,7 @@ inputs
 PROTOCOL.html
 documents/
 .Rprofile
+.vscode
 
 # Plots
 *.tiff
