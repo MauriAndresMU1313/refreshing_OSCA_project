@@ -63,7 +63,7 @@ SeuratData::InstallData("bmcite")
 bm <- SeuratData::LoadData(ds = "bmcite")
 ```
 
-# Process
+# Process and plot
 
 ```{r}
 Seurat::DefaultAssay(bm) <- 'RNA'
@@ -93,6 +93,182 @@ bm <- Seurat::FindMultiModalNeighbors(
   dims.list = list(1:30, 1:18),
   modality.weight.name = "RNA.weight"
 )
+
+bm %<>%
+  Seurat::RunUMAP(
+    nn.name = "weighted.nn",
+    reduction.name = "wnn.umap",
+    reduction.key = "wnnUMAP_"
+  ) %>%
+  Seurat::FindClusters(
+    graph.name = "wsnn",
+    algorithm = 3,
+    resolution = 2,
+    verbose = FALSE
+  )
+
+# Plot
+.p1 <- .dim_umap_scpub(
+  SEURAT_OBJECT = bm,
+  POINT_SIZE = 0.5,
+  LABEL_SIZE = 5,
+  LABEL = TRUE,
+  REDUCTION = "wnn.umap",
+  PALETTE = "Archambault"
+) +
+  Seurat::NoLegend()
+
+.p2 <- .dim_umap_scpub(
+  SEURAT_OBJECT = bm,
+  POINT_SIZE = 0.5,
+  LABEL_SIZE = 5,
+  LABEL = TRUE,
+  GROUP_BY = "celltype.l2",
+  REDUCTION = "wnn.umap",
+  PALETTE = "Archambault"
+) +
+  Seurat::NoLegend()
+
+fs::dir_create(
+  path = file.path(
+    c("outputs", "plots"),
+    "05_wnn"
+  )
+)
+
+.p1 + .p2
+
+# Save
+# .tiff_pdf_plot(
+#   PLOT = .p1 + .p2,
+#   HEIGHT = 6,
+#   WIDTH = 8,
+#   DIRECTORY = file.path(
+#     directory,
+#     "plots",
+#     "05_wnn"
+#   ),
+#   FILENAME = paste0(format(Sys.Date(), "%Y_%b_%d"), "_umap_wnn_cellTypes")
+# )
+
+# RNA and protein dimensional reduction
+bm %<>%
+  Seurat::RunUMAP(
+    reduction = 'pca',
+    dims = 1:30,
+    assay = 'RNA',
+    reduction.name = 'rna.umap',
+    reduction.key = 'rnaUMAP_'
+  )
+
+bm %<>%
+  Seurat::RunUMAP(
+    reduction = 'apca',
+    dims = 1:18,
+    assay = 'ADT',
+    reduction.name = 'adt.umap',
+    reduction.key = 'adtUMAP_'
+  )
+
+.p1 <- .dim_umap_scpub(
+  SEURAT_OBJECT = bm,
+  REDUCTION = "rna.umap",
+  POINT_SIZE = 0.5,
+  LABEL_SIZE = 5,
+  LABEL = TRUE,
+  GROUP_BY = "celltype.l2",
+  PALETTE = "Archambault"
+) +
+  Seurat::NoLegend()
+
+.p2 <- .dim_umap_scpub(
+  SEURAT_OBJECT = bm,
+  POINT_SIZE = 0.5,
+  LABEL_SIZE = 5,
+  LABEL = TRUE,
+  GROUP_BY = "celltype.l2",
+  REDUCTION = "adt.umap",
+  PALETTE = "Archambault"
+) +
+  Seurat::NoLegend()
+
+.p1 + .p2
+
+# .tiff_pdf_plot(
+#   PLOT = .p1 + .p2,
+#   HEIGHT = 6,
+#   WIDTH = 8,
+#   DIRECTORY = file.path(
+#     directory,
+#     "plots",
+#     "05_wnn"
+#   ),
+#   FILENAME = paste0(format(Sys.Date(), "%Y_%b_%d"), "_umap_rna_adt_annotated")
+# )
+
+# saveRDS(
+#   object = bm,
+#   file.path(
+#     directory,
+#     "outputs",
+#     "05_wnn",
+#     paste0(format(Sys.Date(), "%Y_%b_%d"), "_bm_multimodal_dim_reduced.rds")
+#   )
+# )
+
+.p1 <- .feature_plot_markers(
+  SEURAT_OBJECT = bm,
+  MARKERS = c("CD45RA", "CD16", "CD161"),
+  ASSAY = "ADT",
+  REDUCTION = "wnn.umap",
+  MAX_CUTOFF = 2,
+  PALETTE = "Blues",
+  COLUMNS = 3
+)
+
+.p2 <- .feature_plot_markers(
+  SEURAT_OBJECT = bm,
+  MARKERS = c("TRDC", "MPO", "AVP"),
+  ASSAY = "RNA",
+  REDUCTION = "wnn.umap",
+  MAX_CUTOFF = 2,
+  PALETTE = "Oranges",
+  COLUMNS = 3
+)
+
+.p1 / .p2
+
+# .tiff_pdf_plot(
+#   PLOT = .p1 / .p2,
+#   HEIGHT = 12,
+#   WIDTH = 10,
+#   DIRECTORY = file.path(
+#     directory,
+#     "plots",
+#     "05_wnn"
+#   ),
+#   FILENAME = paste0(format(Sys.Date(), "%Y_%b_%d"), "_feature_rna_adt_markers")
+# )
+
+.p1 <- .vln_plot_markers(
+  SEURAT_OBJECT = bm,
+  MARKERS = "RNA.weight",
+  GROUP_BY = "celltype.l2",
+  ASSAY = "RNA",
+  PALETTE = "Archambault"
+)
+
+# .tiff_pdf_plot(
+#   PLOT = .p1,
+#   HEIGHT = 10,
+#   WIDTH = 14,
+#   DIRECTORY = file.path(
+#     directory,
+#     "plots",
+#     "05_wnn"
+#   ),
+#   FILENAME = paste0(format(Sys.Date(), "%Y_%b_%d"), "_violin_rna_weights")
+# )
 ```
 
 ```{r}

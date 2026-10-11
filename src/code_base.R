@@ -156,7 +156,8 @@
   SPLIT_BY = NULL,
   MAX_CUTOFF = NULL,
   REDUCTION = "umap",
-  COLUMNS = NULL
+  COLUMNS = NULL,
+  ASSAY = NULL
 ) {
   #' Feature plots for marker genes arranged in a grid
   #'
@@ -167,6 +168,7 @@
   #' @param MAX_CUTOFF maximum expression cutoff value
   #' @param REDUCTION dimensional reduction to use, defaults to "umap"
   #' @param COLUMNS number of columns in patchwork layout
+  #' @param ASSAY assay to use, defaults to NULL
   #' @return patchwork grid of feature plots
 
   if (is.null(SPLIT_BY)) {
@@ -175,22 +177,22 @@
       ~ SCpubr::do_FeaturePlot(
         sample = SEURAT_OBJECT,
         features = .x,
+        assay = ASSAY,
         reduction = REDUCTION,
         max.cutoff = MAX_CUTOFF,
-        sequential.palette = PALETTE,
-        ncol = COLUMNS
+        sequential.palette = PALETTE
       )
     ) %>%
-      patchwork::wrap_plots()
+      patchwork::wrap_plots(ncol = COLUMNS)
   } else {
     SCpubr::do_FeaturePlot(
       sample = SEURAT_OBJECT,
       features = MARKERS,
+      assay = ASSAY,
       split.by = SPLIT_BY,
       reduction = REDUCTION,
       max.cutoff = MAX_CUTOFF,
-      sequential.palette = PALETTE,
-      ncol = COLUMNS
+      sequential.palette = PALETTE
     )
   }
 }
