@@ -29,7 +29,6 @@ packages <- c(
     "magrittr",
     "ComplexHeatmap",
     "devtools",
-    "magrittr",
     # Single Cell
     "Seurat",
     "SeuratObject",
