@@ -43,4 +43,11 @@
 
 - Workflow performed:
     1. Integration of reference into single-cell workflow.
-    2. Failure to integrate `Azimuth` into the workflow due to incompatibility with MacOS. However, `Docker` image is available in case is need it. 
+    2. Failure to integrate `Azimuth` into the workflow due to incompatibility with MacOS. However, `Docker` image is available in case is need it.   
+
+
+## Sep 19, 2026
+
+- Restarting workflow.
+- Workflow focus:
+    1. WNN analysis of CITE-seq, RNA + ADT. 
